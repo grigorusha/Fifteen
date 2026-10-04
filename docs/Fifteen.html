@@ -1,0 +1,1081 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Пятнашки с перегородками</title>
+<style>
+  :root{--txt:#1b2230;--muted:#5b6577;--stroke:rgba(0,0,0,.12);--panel-bg:rgba(255,255,255,.85);--board-bg-1:#eef1f6;--board-bg-2:#dfe3ea;--body-bg:#c9ccd2;--tile-1:#fff;--tile-2:#eef2f8;--tile-3:#dbe2ec;--tile-inner:rgba(90,110,145,.42);--wall-1:#54607a;--wall-2:#8fa4c7;--wall-3:#fff;--wall-4:#7d94b8;--wall-5:#4a556e;--wall-6:#54607a;--wall-glow:rgba(120,190,255,.55);--wall-glow-hi:rgba(170,225,255,.95);--win-overlay:rgba(30,40,60,.28);--win-bg-1:rgba(255,255,255,.98);--win-bg-2:rgba(236,240,246,.98);--win-text:#1b2230;--btn-bg-1:#fff;--btn-bg-2:#e9edf3;--btn-bg-1-hover:#fff;--btn-bg-2-hover:#f3f6fa}
+  html[data-theme="dark"]{--txt:#e8eefc;--muted:#9aa7c0;--stroke:rgba(255,255,255,.14);--panel-bg:rgba(255,255,255,.08);--board-bg-1:#2a3350;--board-bg-2:#1b2238;--body-bg:#3a4560;--tile-1:#fff;--tile-2:#e2eaf8;--tile-3:#c6d3e9;--tile-inner:rgba(60,80,115,.45);--wall-1:#aab9d6;--wall-2:#dde9ff;--wall-3:#fff;--wall-4:#cfdfff;--wall-5:#8fa2c4;--wall-6:#aab9d6;--wall-glow:rgba(120,200,255,.5);--wall-glow-hi:rgba(190,235,255,.95);--win-overlay:rgba(6,10,20,.5);--win-bg-1:rgba(44,60,102,.96);--win-bg-2:rgba(18,25,46,.97);--win-text:#e8eefc;--btn-bg-1:rgba(255,255,255,.28);--btn-bg-2:rgba(255,255,255,.14);--btn-bg-1-hover:rgba(255,255,255,.38);--btn-bg-2-hover:rgba(255,255,255,.22)}
+  *{box-sizing:border-box}html,body{height:100%}body{margin:0;min-height:100dvh;font-family:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,Arial,sans-serif;color:var(--txt);background:var(--body-bg);display:flex;justify-content:center;padding:26px 16px 44px;-webkit-tap-highlight-color:transparent;-webkit-font-smoothing:antialiased;transition:background .25s,color .25s}
+  .app{width:min(1120px,100%);display:flex;flex-direction:column;gap:20px}.topbar{display:flex;justify-content:center}
+  .topbar h1{margin:0;font-size:clamp(21px,3.4vw,29px);font-weight:800;letter-spacing:-.01em;text-align:center;background:linear-gradient(100deg,#5b6cff 0%,#2f8ee0 45%,#7b48d8 100%);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent}
+  html[data-theme="dark"] .topbar h1{background:linear-gradient(100deg,#fff 10%,#9fd6ff 50%,#b5a6ff 95%);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent}
+  .game{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:22px;align-items:stretch}@media(max-width:960px){.game{grid-template-columns:1fr;gap:18px}}
+  .board-area{position:relative;width:100%;max-width:660px;margin:0 auto;display:flex;flex-direction:column}
+  .board{position:relative;width:100%;aspect-ratio:1/1;border-radius:24px;background:linear-gradient(180deg,var(--board-bg-1),var(--board-bg-2));border:1px solid var(--stroke);box-shadow:0 30px 60px -24px rgba(0,0,0,.5),0 0 0 1px rgba(0,0,0,.06),inset 0 1px 0 rgba(255,255,255,.35);overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none;transition:background .25s,box-shadow .25s}
+  .board.is-solved{box-shadow:0 30px 60px -24px rgba(0,0,0,.5),0 0 0 1px rgba(60,150,255,.45),0 0 70px -14px rgba(80,170,255,.75),inset 0 1px 0 rgba(255,255,255,.35)}
+  .walls-layer{position:absolute;inset:0;pointer-events:none;z-index:3}
+  @keyframes wallFlow{0%{background-position:0 50%;box-shadow:0 0 8px var(--wall-glow),0 2px 5px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.75)}50%{background-position:100% 50%;box-shadow:0 0 20px var(--wall-glow-hi),0 2px 5px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.95)}100%{background-position:0 50%;box-shadow:0 0 8px var(--wall-glow),0 2px 5px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.75)}}
+  .wall{position:absolute;border-radius:7px;background:linear-gradient(100deg,var(--wall-1) 0%,var(--wall-2) 25%,var(--wall-3) 42%,var(--wall-4) 55%,var(--wall-5) 78%,var(--wall-6) 100%);background-size:320% 100%;animation:wallFlow 3.4s ease-in-out infinite}
+  .tile{position:absolute;left:0;top:0;display:flex;align-items:center;justify-content:center;border-radius:16px;font-weight:800;font-variant-numeric:tabular-nums;color:#1b2230;background:linear-gradient(165deg,var(--tile-1) 0%,var(--tile-2) 52%,var(--tile-3) 100%);box-shadow:0 5px 0 -1px rgba(80,95,120,.55),0 12px 22px -10px rgba(20,30,50,.7),inset 0 1px 0 rgba(255,255,255,.98),inset 0 -3px 0 rgba(120,142,182,.30);transition:transform .18s cubic-bezier(.22,.9,.3,1.15),box-shadow .2s,filter .2s;will-change:transform;cursor:grab;z-index:2;overflow:hidden}
+  .tile::after{content:"";position:absolute;inset:11px;border-radius:inherit;border:1.5px solid var(--tile-inner);box-shadow:inset 0 1px 0 rgba(255,255,255,.6);pointer-events:none}
+  .tile.is-dragging{filter:brightness(1.04);box-shadow:0 9px 0 -2px rgba(80,95,120,.5),0 22px 34px -12px rgba(20,30,50,.85),0 0 24px -4px rgba(92,200,255,.7),inset 0 1px 0 rgba(255,255,255,.98);cursor:grabbing;z-index:5}
+  .board.no-anim .tile{transition:none!important}
+  .panel{display:flex;flex-direction:column;gap:14px;padding:16px;border-radius:20px;border:1px solid var(--stroke);background:var(--panel-bg);box-shadow:0 20px 44px -26px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.15);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);align-self:stretch;min-height:0;transition:background .25s,border-color .25s}
+  .panel-spacer{flex:1 1 auto;min-height:0}.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .stat{display:flex;flex-direction:column;gap:3px;padding:10px 12px;border-radius:14px;background:rgba(0,0,0,.05);border:1px solid var(--stroke);box-shadow:inset 0 1px 0 rgba(255,255,255,.1)}html[data-theme="dark"] .stat{background:rgba(0,0,0,.28)}
+  .stat-label{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700}
+  .stat-value{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--txt)}
+  .group{display:flex;flex-direction:column;gap:8px}.group-title{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;padding-left:3px}
+  .modes{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+  .mode-btn{position:relative;display:flex;align-items:center;justify-content:space-between;gap:5px;padding:9px;font:inherit;font-size:11px;font-weight:650;text-align:left;color:var(--txt);background:linear-gradient(180deg,var(--btn-bg-1),var(--btn-bg-2));border:1px solid var(--stroke);border-radius:10px;cursor:pointer;transition:color .18s,background .18s,border-color .18s,box-shadow .18s,transform .12s,opacity .2s;min-width:0}
+  .mode-btn>span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mode-btn:hover:not(:disabled){background:linear-gradient(180deg,var(--btn-bg-1-hover),var(--btn-bg-2-hover))}
+  .mode-btn:active:not(:disabled){transform:scale(.97)}.mode-btn:disabled{opacity:.45;cursor:not-allowed}
+  .mode-btn.is-active{color:#0d2440;background:linear-gradient(180deg,rgba(120,200,255,.55),rgba(120,150,255,.35));border-color:rgba(60,140,220,.7);box-shadow:0 0 0 1px rgba(60,140,220,.25),0 8px 18px -10px rgba(60,140,220,.9)}
+  .mode-btn .cnt{font-size:10px;font-weight:800;flex:0 0 auto;padding:2px 6px;border-radius:999px;background:rgba(0,0,0,.06);border:1px solid var(--stroke);color:var(--muted)}html[data-theme="dark"] .mode-btn .cnt{background:rgba(0,0,0,.35)}
+  .mode-btn.is-active .cnt{color:#0d2440;border-color:rgba(60,140,220,.4)}
+  .actions{display:grid;grid-template-columns:1fr 1fr;gap:8px}.actions .wide{grid-column:1/-1}
+  .btn{appearance:none;font:inherit;font-size:13px;font-weight:650;color:var(--txt);padding:10px 12px;border-radius:11px;border:1px solid var(--stroke);background:linear-gradient(180deg,var(--btn-bg-1),var(--btn-bg-2));box-shadow:0 6px 14px -10px rgba(0,0,0,.7),inset 0 1px 0 rgba(255,255,255,.65);cursor:pointer;transition:transform .12s,background .2s,box-shadow .2s,opacity .2s;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap}
+  html[data-theme="dark"] .btn{box-shadow:0 8px 18px -12px rgba(0,0,0,1),inset 0 1px 0 rgba(255,255,255,.28)}
+  .btn .ico{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;flex:0 0 auto}.btn .ico svg{display:block;width:100%;height:100%}
+  .btn:hover:not(:disabled){background:linear-gradient(180deg,var(--btn-bg-1-hover),var(--btn-bg-2-hover));transform:translateY(-1px)}
+  .btn:active:not(:disabled){transform:translateY(1px) scale(.99)}.btn:disabled{opacity:.35;cursor:not-allowed}
+  .btn.primary{color:#06121f;font-weight:800;background:linear-gradient(180deg,#7ed5ff,#3d8ef0);border-color:rgba(60,140,220,.7);box-shadow:0 10px 22px -12px rgba(80,170,255,1),inset 0 1px 0 rgba(255,255,255,.7)}
+  .btn.primary:hover:not(:disabled){background:linear-gradient(180deg,#93ddff,#4d9bf7)}
+  .btn.solve{color:#0a2a16;font-weight:800;background:linear-gradient(180deg,#b6f0c8,#4ad28c);border-color:rgba(60,180,110,.7);box-shadow:0 10px 22px -12px rgba(74,210,140,1),inset 0 1px 0 rgba(255,255,255,.7)}
+  .btn.solve:hover:not(:disabled){background:linear-gradient(180deg,#c8f7d6,#5add99)}
+  .btn.stop{color:#fff;font-weight:800;background:linear-gradient(180deg,#ff7b7b,#e03b3b);border-color:rgba(200,50,50,.7);box-shadow:0 10px 22px -12px rgba(224,59,59,1),inset 0 1px 0 rgba(255,255,255,.5)}
+  .btn.stop:hover:not(:disabled){background:linear-gradient(180deg,#ff9090,#ec4b4b)}
+  .hint{margin:0;padding:0 3px;font-size:12px;line-height:1.55;color:var(--muted);font-variant-numeric:tabular-nums;min-height:2.8em;white-space:pre-line}
+  .hint.is-error{color:#c23232;font-weight:600}html[data-theme="dark"] .hint.is-error{color:#ffb0b0}
+  .hint.is-success{color:#116b3e;font-weight:600}html[data-theme="dark"] .hint.is-success{color:#b6f0c8}
+  .hint.is-search{text-align:center;color:#184a78;font-weight:600}html[data-theme="dark"] .hint.is-search{color:#b9e6ff}
+  .win{position:absolute;inset:0;display:none;align-items:center;justify-content:center;padding:12px;background:var(--win-overlay);border-radius:24px;z-index:10;pointer-events:none}
+  .win.show{display:flex;animation:fade .28s ease}
+  .win-card{pointer-events:auto;text-align:center;padding:20px 28px;border-radius:20px;background:linear-gradient(180deg,var(--win-bg-1),var(--win-bg-2));border:1px solid rgba(255,255,255,.18);box-shadow:0 30px 60px -24px rgba(0,0,0,.85),0 0 60px -20px rgba(92,200,255,.85);animation:pop .36s cubic-bezier(.2,1.5,.4,1);display:flex;flex-direction:column;align-items:center;gap:10px}
+  .win-emoji{font-size:36px;line-height:1}.win-card h2{margin:0;font-size:22px;font-weight:800;letter-spacing:-.01em;color:var(--win-text)}.win-card p{margin:0;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}.win-card .btn{padding:10px 22px;font-size:13px}
+  .toast{position:fixed;bottom:96px;left:50%;transform:translateX(-50%) translateY(12px);padding:12px 22px;border-radius:14px;background:linear-gradient(180deg,var(--btn-bg-1),var(--btn-bg-2));border:1px solid var(--stroke);color:var(--txt);font-size:14px;font-weight:650;box-shadow:0 20px 44px -18px rgba(0,0,0,.7),0 0 40px -12px rgba(120,190,255,.55);z-index:100;opacity:0;transition:opacity .28s,transform .28s;pointer-events:none;max-width:calc(100vw - 40px);text-align:center;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .credits{margin-top:4px;padding:14px 22px;border-radius:16px;border:1px solid var(--stroke);background:var(--panel-bg);box-shadow:0 14px 30px -22px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.4);font-size:12.5px;line-height:1.9;color:var(--muted);text-align:center;position:relative;z-index:5;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+  .credits-line{display:block}.credits-line+.credits-line{margin-top:4px;padding-top:6px;border-top:1px dashed var(--stroke)}
+  .credits a{color:#185a9c;text-decoration:none;border-bottom:1px dotted rgba(24,90,156,.5);cursor:pointer;pointer-events:auto;transition:color .18s,border-color .18s}
+  html[data-theme="dark"] .credits a{color:#9fd6ff;border-bottom-color:rgba(159,214,255,.45)}
+  .credits a:hover{color:#0b3050;border-bottom-color:rgba(11,48,80,.85)}html[data-theme="dark"] .credits a:hover{color:#fff;border-bottom-color:rgba(255,255,255,.8)}
+  .theme-bar{display:flex;justify-content:center;margin-top:2px}
+  .theme-toggle{appearance:none;font:inherit;font-size:13px;font-weight:700;color:var(--txt);padding:10px 18px;border-radius:12px;border:1px solid var(--stroke);background:linear-gradient(180deg,var(--btn-bg-1),var(--btn-bg-2));box-shadow:0 8px 18px -14px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.5);cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:background .2s,transform .12s,box-shadow .2s}
+  html[data-theme="dark"] .theme-toggle{box-shadow:0 8px 18px -14px rgba(0,0,0,1),inset 0 1px 0 rgba(255,255,255,.28)}
+  .theme-toggle:hover{background:linear-gradient(180deg,var(--btn-bg-1-hover),var(--btn-bg-2-hover));transform:translateY(-1px)}
+  .theme-toggle:active{transform:translateY(1px) scale(.99)}.theme-toggle .tt-ico{font-size:16px;line-height:1}
+  @keyframes pop{from{transform:scale(.9);opacity:0}to{transform:scale(1);opacity:1}}@keyframes fade{from{opacity:0}to{opacity:1}}
+</style>
+</head>
+<body>
+
+<div class="app">
+  <header class="topbar"><h1>Пятнашки с перегородками</h1></header>
+  <div class="game">
+    <div class="board-area">
+      <div class="board" id="board"><div class="walls-layer" id="walls"></div></div>
+      <div class="win" id="win">
+        <div class="win-card">
+          <div class="win-emoji">🎉</div>
+          <h2>Собрано!</h2>
+          <p><span id="winMoves">0</span> ходов · <span id="winTime">00:00</span></p>
+          <button class="btn primary" id="winBtn">Ещё раз</button>
+        </div>
+      </div>
+    </div>
+    <aside class="panel">
+      <div class="stats">
+        <div class="stat"><span class="stat-label">Ходы</span><span class="stat-value" id="movesEl">0</span></div>
+        <div class="stat"><span class="stat-label">Время</span><span class="stat-value" id="timeEl">00:00</span></div>
+      </div>
+      <div class="group">
+        <div class="group-title">Режим доски</div>
+        <div class="modes" id="modes">
+          <button class="mode-btn is-active" data-mode="classic"><span>Классика</span><span class="cnt">0</span></button>
+          <button class="mode-btn" data-mode="wallsA"><span>Перегородки A</span><span class="cnt">6</span></button>
+          <button class="mode-btn" data-mode="wallsB"><span>Перегородки B</span><span class="cnt">6</span></button>
+          <button class="mode-btn" data-mode="wallsC"><span>Перегородки C</span><span class="cnt">6</span></button>
+          <button class="mode-btn" data-mode="wallsD"><span>Перегородки D</span><span class="cnt">6</span></button>
+          <button class="mode-btn" data-mode="wallsE"><span>Перегородки E</span><span class="cnt">4</span></button>
+          <button class="mode-btn" data-mode="wallsF"><span>Перегородки F</span><span class="cnt">4</span></button>
+          <button class="mode-btn" data-mode="wallsG"><span>Перегородки G</span><span class="cnt">4</span></button>
+        </div>
+      </div>
+      <div class="panel-spacer"></div>
+      <div class="group">
+        <div class="group-title">Управление</div>
+        <div class="actions">
+          <button class="btn" id="undoBtn"><span class="ico">↶</span>Назад</button>
+          <button class="btn" id="redoBtn"><span class="ico">↷</span>Вперёд</button>
+          <button class="btn primary wide" id="scrambleBtn"><span class="ico">🎲</span>Перемешать</button>
+          <button class="btn" id="resetBtn"><span class="ico">↺</span>Сброс</button>
+          <button class="btn solve" id="solveBtn"><span class="ico"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5 L13.5 8 L4 13.5 Z"/></svg></span>Решить</button>
+        </div>
+      </div>
+      <p class="hint" id="hintText">Тяните плитку на пустую клетку — или просто кликните по ней.
+Перегородки не пропускают плитки.</p>
+    </aside>
+  </div>
+  <footer class="credits">
+    <span class="credits-line">Автор головоломки и вдохновитель проекта: Николай Авилов —
+      <a href="https://elementy.ru/problems/2808/Pyatnashki_s_peregorodkami" target="_blank" rel="noopener noreferrer">elementy.ru/problems/2808</a>
+    </span>
+    <span class="credits-line">Разработчики: Deepseek + Grigorusha —
+      <a href="https://github.com/grigorusha" target="_blank" rel="noopener noreferrer">github.com/grigorusha</a>
+    </span>
+  </footer>
+  <div class="theme-bar">
+    <button class="theme-toggle" id="themeToggle" type="button">
+      <span class="tt-ico" id="ttIco">🌙</span>
+      <span id="ttLabel">Тёмная тема</span>
+    </button>
+  </div>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+/* ========== ТЕМА ========== */
+const THEME_KEY='15puzzle.theme';
+function applyTheme(t){
+  document.documentElement.setAttribute('data-theme',t);
+  document.getElementById('ttIco').textContent=t==='dark'?'🌙':'☀️';
+  document.getElementById('ttLabel').textContent=t==='dark'?'Тёмная тема':'Светлая тема';
+  try{localStorage.setItem(THEME_KEY,t);}catch(_){}
+}
+function currentTheme(){try{const s=localStorage.getItem(THEME_KEY);if(s==='dark'||s==='light')return s;}catch(_){}return 'dark';}
+applyTheme(currentTheme());
+document.getElementById('themeToggle').addEventListener('click',()=>{
+  applyTheme(document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark');
+});
+
+const SIZE=4, N=16;
+const MODE_WALLS={
+  classic:[],
+  wallsA:[[2,6],[3,7],[6,10],[7,11],[10,14],[11,15]],
+  wallsB:[[2,6],[3,7],[7,8],[9,10],[10,14],[11,15]],
+  wallsC:[[2,6],[3,7],[5,9],[8,12],[10,14],[11,15]],
+  wallsD:[[5,6],[9,10],[6,10],[7,11],[7,8],[11,12]],
+  wallsE:[[6,7],[6,10],[7,11],[10,11]],
+  wallsF:[[2,6],[7,8],[11,15],[9,10]],
+  wallsG:[[2,3],[14,15],[6,10],[7,11]]
+};
+/* Фаза 1 по доскам.
+   B: плитки 1,2,3,4 (верхний ряд) + 8 (клетка 7).
+   E: плитки 1,2,3,4,5,8 (совпадает с C). */
+const PHASE1={
+  classic:{cells:[0,1,2,3],tiles:[1,2,3,4]},
+  wallsA:{cells:[0,1,2,3],tiles:[1,2,3,4]},
+  wallsB:{cells:[0,1,2,3,7],tiles:[1,2,3,4,8]},
+  wallsC:{cells:[0,1,2,3,4,7],tiles:[1,2,3,4,5,8]},
+  wallsD:{cells:[5,6],tiles:[6,7]},
+  wallsE:{cells:[0,1,2,3,4,7],tiles:[1,2,3,4,5,8]},
+  wallsF:{cells:[0,1,2,3],tiles:[1,2,3,4]},
+  wallsG:{cells:[0,1,2,3],tiles:[1,2,3,4]}
+};
+const CFG={
+  classic:{p1W:[5,3,2,1.5,1], p1T:120000, p1S:25000000, p2W:[5,3,2,1.5,1], p2T:240000, p2S:50000000},
+  wallsA: {p1W:[5,3,2,1.5,1], p1T:120000, p1S:25000000, p2W:[5,3,2,1.5,1], p2T:240000, p2S:50000000},
+  wallsB: {p1W:[5,3,2,1.5,1], p1T:150000, p1S:30000000, p2W:[5,3,2,1.5,1], p2T:300000, p2S:60000000},
+  wallsC: {p1W:[5,3,2,1.5,1], p1T:150000, p1S:30000000, p2W:[5,3,2,1.5,1], p2T:300000, p2S:60000000},
+  wallsD: {p1W:[5,3,2,1.5,1], p1T:60000,  p1S:10000000, p2W:[5,3,2,1.5,1], p2T:300000, p2S:60000000},
+  wallsE: {p1W:[5,3,2,1.5,1], p1T:150000, p1S:30000000, p2W:[5,3,2,1.5,1], p2T:300000, p2S:60000000},
+  wallsF: {p1W:[5,3,2,1.5,1], p1T:120000, p1S:25000000, p2W:[5,3,2,1.5,1], p2T:240000, p2S:50000000},
+  wallsG: {p1W:[5,3,2,1.5,1], p1T:120000, p1S:25000000, p2W:[5,3,2,1.5,1], p2T:240000, p2S:50000000}
+};
+const DEFAULT_HINT='Тяните плитку на пустую клетку — или просто кликните по ней.\nПерегородки не пропускают плитки.';
+const SVG_PLAY='<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5 L13.5 8 L4 13.5 Z"/></svg>';
+const SVG_STOP='<svg viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="3" width="10" height="10" rx="2"/></svg>';
+
+const boardEl=document.getElementById('board'),wallsEl=document.getElementById('walls');
+const movesEl=document.getElementById('movesEl'),timeEl=document.getElementById('timeEl');
+const winEl=document.getElementById('win'),winMovesEl=document.getElementById('winMoves'),winTimeEl=document.getElementById('winTime');
+const undoBtn=document.getElementById('undoBtn'),redoBtn=document.getElementById('redoBtn');
+const scrambleBtn=document.getElementById('scrambleBtn'),resetBtn=document.getElementById('resetBtn');
+const solveBtn=document.getElementById('solveBtn'),winBtn=document.getElementById('winBtn');
+const modesEl=document.getElementById('modes'),hintText=document.getElementById('hintText');
+
+let cells=new Array(N).fill(0),empty=N-1,history=[],redoStack=[];
+let wallSet=new Set(),mode='classic',solved=false;
+let dragging=null,busy=false,animating=false,animationTimer=null,searchAborted=false;
+let metrics={pad:0,gap:0,cell:0,wall:0},tiles=new Array(N).fill(null);
+let elapsed=0,timerBase=0,timerId=null,timerOn=false;
+
+const rowOf=i=>i>>2,colOf=i=>i&3,cellIndex=(r,c)=>r*4+c;
+const pairKey=(a,b)=>a<b?a+':'+b:b+':'+a;
+function buildWallSet(pairs){const s=new Set();for(let k=0;k<pairs.length;k++)s.add(pairKey(pairs[k][0]-1,pairs[k][1]-1));return s;}
+function isOpen(a,b){return !wallSet.has(pairKey(a,b));}
+function canMoveTo(from,to){
+  if(to<0)return false;
+  const dr=Math.abs(rowOf(from)-rowOf(to)),dc=Math.abs(colOf(from)-colOf(to));
+  if(dr+dc!==1)return false;
+  return isOpen(from,to);
+}
+let toastTimer=null;
+function showToast(msg){let t=document.querySelector('.toast');if(!t){t=document.createElement('div');t.className='toast';document.body.appendChild(t);}t.textContent=msg;void t.offsetWidth;t.classList.add('show');if(toastTimer)clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2800);}
+function setHint(text,kind){hintText.textContent=text;hintText.classList.remove('is-error','is-success','is-search');if(kind==='error')hintText.classList.add('is-error');else if(kind==='success')hintText.classList.add('is-success');else if(kind==='search')hintText.classList.add('is-search');}
+function resetHint(){setHint(DEFAULT_HINT);}
+function fmtTime(ms){const t=Math.floor(ms/1000);return String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0');}
+function startTimer(){if(timerOn)return;timerOn=true;timerBase=performance.now()-elapsed;timerId=setInterval(()=>{elapsed=performance.now()-timerBase;timeEl.textContent=fmtTime(elapsed);},120);}
+function stopTimer(){timerOn=false;if(timerId!==null){clearInterval(timerId);timerId=null;}}
+function resetTimer(){stopTimer();elapsed=0;timeEl.textContent='00:00';}
+function getMemMB(){if(!performance.memory)return null;return Math.round(performance.memory.usedJSHeapSize/1048576);}
+
+function createTiles(){tiles=new Array(N).fill(null);for(let v=1;v<N;v++){const el=document.createElement('div');el.className='tile';el.textContent=String(v);boardEl.appendChild(el);tiles[v]=el;}}
+function measure(){
+  const w=boardEl.clientWidth;if(!w)return;
+  const pad=w*0.045,gap=w*0.022;
+  const cell=(w-pad*2-gap*3)/SIZE,wall=Math.max(3,w*0.0115);
+  metrics={pad,gap,cell,wall};
+  for(let v=1;v<N;v++){const el=tiles[v];if(!el)continue;el.style.width=cell+'px';el.style.height=cell+'px';el.style.fontSize=(cell*0.68)+'px';el.style.borderRadius=Math.max(8,cell*0.2)+'px';}
+  renderWalls();updatePositions(true);
+}
+function renderWalls(){
+  wallsEl.innerHTML='';
+  const{pad,gap,cell,wall}=metrics,step=cell+gap;
+  wallSet.forEach(key=>{
+    const[a,b]=key.split(':').map(Number);
+    const ra=rowOf(a),ca=colOf(a),rb=rowOf(b),cb=colOf(b);
+    const el=document.createElement('div');el.className='wall';
+    if(ra===rb){const x=pad+Math.max(ca,cb)*step-gap/2;el.style.left=(x-wall/2)+'px';el.style.top=(pad+ra*step-gap*0.28)+'px';el.style.width=wall+'px';el.style.height=(cell+gap*0.56)+'px';}
+    else{const y=pad+Math.max(ra,rb)*step-gap/2;el.style.top=(y-wall/2)+'px';el.style.left=(pad+ca*step-gap*0.28)+'px';el.style.height=wall+'px';el.style.width=(cell+gap*0.56)+'px';}
+    wallsEl.appendChild(el);
+  });
+}
+function positionOf(i){const step=metrics.cell+metrics.gap;return{x:metrics.pad+colOf(i)*step,y:metrics.pad+rowOf(i)*step};}
+function updatePositions(instant){
+  if(instant)boardEl.classList.add('no-anim');
+  for(let i=0;i<N;i++){const v=cells[i];if(!v)continue;const p=positionOf(i);tiles[v].style.transform=`translate3d(${p.x}px,${p.y}px,0)`;}
+  if(instant){void boardEl.offsetWidth;boardEl.classList.remove('no-anim');}
+}
+function render(instant){updatePositions(!!instant);movesEl.textContent=String(history.length);updateButtons();}
+function updateButtons(){
+  undoBtn.disabled=busy||animating||solved||history.length===0;
+  redoBtn.disabled=busy||animating||solved||redoStack.length===0;
+  scrambleBtn.disabled=busy||animating;
+  resetBtn.disabled=busy||animating;
+  solveBtn.disabled=solved&&solveBtn.dataset.state!=='stop';
+  const mb=modesEl.querySelectorAll('.mode-btn');
+  for(let i=0;i<mb.length;i++)mb[i].disabled=busy||animating;
+}
+function applyMove(from,to){cells[to]=cells[from];cells[from]=0;empty=from;}
+function userMove(from){
+  if(solved||busy||animating)return false;
+  if(!canMoveTo(from,empty))return false;
+  const to=empty;applyMove(from,to);
+  history.push({from,to});redoStack.length=0;
+  if(!timerOn)startTimer();
+  render();checkWin();return true;
+}
+function undo(){if(busy||animating||solved||!history.length)return;const m=history.pop();applyMove(m.to,m.from);redoStack.push(m);render();}
+function redo(){if(busy||animating||solved||!redoStack.length)return;const m=redoStack.pop();applyMove(m.from,m.to);history.push(m);render();}
+
+function resetSolvedBoard(){for(let i=0;i<N-1;i++)cells[i]=i+1;cells[N-1]=0;empty=N-1;}
+function shuffleBoard(){
+  let prevEmpty=-1;
+  for(let k=0;k<500;k++){
+    const opts=[];const r=rowOf(empty),c=colOf(empty);
+    if(r>0)opts.push(empty-4);if(r<3)opts.push(empty+4);
+    if(c>0)opts.push(empty-1);if(c<3)opts.push(empty+1);
+    const valid=opts.filter(n=>n!==prevEmpty&&isOpen(empty,n));
+    if(!valid.length)break;
+    const pick=valid[(Math.random()*valid.length)|0];
+    cells[empty]=cells[pick];cells[pick]=0;prevEmpty=empty;empty=pick;
+  }
+}
+function isSolvedLayout(){for(let i=0;i<N-1;i++)if(cells[i]!==i+1)return false;return cells[N-1]===0;}
+function stopEverything(){searchAborted=true;if(animationTimer!==null){clearTimeout(animationTimer);animationTimer=null;}animating=false;busy=false;}
+function newGame(doShuffle){
+  stopEverything();hideWin();solved=false;resetSolvedBoard();
+  if(doShuffle){let g=0;do{shuffleBoard();g++;}while(isSolvedLayout()&&g<20);}
+  history=[];redoStack=[];resetTimer();render(true);setSolveButtonIdle();resetHint();
+}
+function resetToSolved(){
+  if(busy||animating)return;
+  hideWin();solved=false;resetSolvedBoard();
+  history=[];redoStack=[];resetTimer();render(true);setSolveButtonIdle();resetHint();
+}
+function checkWin(){
+  if(!isSolvedLayout())return;
+  solved=true;stopTimer();stopEverything();
+  boardEl.classList.add('is-solved');
+  winMovesEl.textContent=String(history.length);
+  winTimeEl.textContent=fmtTime(elapsed);
+  winEl.classList.add('show');
+  setSolveButtonIdle();updateButtons();resetHint();
+}
+function hideWin(){winEl.classList.remove('show');boardEl.classList.remove('is-solved');}
+
+function hitTest(cx,cy){
+  const rect=boardEl.getBoundingClientRect();
+  const x=cx-rect.left,y=cy-rect.top;
+  if(x<0||y<0||x>rect.width||y>rect.height)return -1;
+  const{pad,cell,gap}=metrics,step=cell+gap;
+  const c=Math.round((x-pad-cell/2)/step),r=Math.round((y-pad-cell/2)/step);
+  if(r<0||r>3||c<0||c>3)return -1;
+  return cellIndex(r,c);
+}
+function onPointerDown(e){
+  if(solved||busy||animating)return;
+  if(e.pointerType==='mouse'&&e.button!==0)return;
+  const i=hitTest(e.clientX,e.clientY);
+  if(i<0||cells[i]===0||!canMoveTo(i,empty))return;
+  const rect=boardEl.getBoundingClientRect();
+  const px=e.clientX-rect.left,py=e.clientY-rect.top,p=positionOf(i);
+  dragging={id:e.pointerId,index:i,tileValue:cells[i],offsetX:px-p.x,offsetY:py-p.y,startPx:px,startPy:py,moved:false};
+  try{boardEl.setPointerCapture(e.pointerId);}catch(_){}
+  const el=tiles[cells[i]];el.classList.add('is-dragging');el.style.transition='none';
+  e.preventDefault();
+}
+function onPointerMove(e){
+  if(!dragging||e.pointerId!==dragging.id)return;
+  const rect=boardEl.getBoundingClientRect();
+  const px=e.clientX-rect.left,py=e.clientY-rect.top;
+  if(!dragging.moved){
+    const dx=px-dragging.startPx,dy=py-dragging.startPy;
+    const th=Math.max(12,metrics.cell*0.28);
+    if(Math.hypot(dx,dy)>th)dragging.moved=true;
+  }
+  if(!dragging.moved)return;
+  const tx=px-dragging.offsetX,ty=py-dragging.offsetY;
+  tiles[dragging.tileValue].style.transform=`translate3d(${tx}px,${ty}px,0)`;
+}
+function onPointerUp(e){
+  if(!dragging||e.pointerId!==dragging.id)return;
+  const d=dragging;dragging=null;
+  const el=tiles[d.tileValue];el.classList.remove('is-dragging');
+  try{boardEl.releasePointerCapture(e.pointerId);}catch(_){}
+  const tc=hitTest(e.clientX,e.clientY);
+  const wasClick=!d.moved,droppedBack=(tc===d.index),droppedOnEmpty=(tc===empty);
+  el.style.transition='';void el.offsetWidth;
+  if(wasClick||droppedBack||droppedOnEmpty){
+    if(!userMove(d.index)){const p=positionOf(d.index);el.style.transform=`translate3d(${p.x}px,${p.y}px,0)`;}
+  }else{const p=positionOf(d.index);el.style.transform=`translate3d(${p.x}px,${p.y}px,0)`;}
+}
+function setMode(m){
+  mode=m;wallSet=buildWallSet(MODE_WALLS[m]||[]);
+  const btns=modesEl.querySelectorAll('.mode-btn');
+  for(const b of btns)b.classList.toggle('is-active',b.dataset.mode===mode);
+  renderWalls();
+}
+
+/* ========== Классический IDA* ========== */
+function solveClassicIDA(maxTimeMs,onProgress){
+  return new Promise(resolve=>{
+    const dist=new Array(N);
+    for(let i=0;i<N;i++){dist[i]=new Array(N);const ri=i>>2,ci=i&3;for(let j=0;j<N;j++)dist[i][j]=Math.abs(ri-(j>>2))+Math.abs(ci-(j&3));}
+    const state0=cells.slice(),empty0=empty;
+    function h(st){let s=0;for(let i=0;i<N;i++){const v=st[i];if(v)s+=dist[i][v-1];}return s;}
+    if(h(state0)===0)return resolve({solution:[],reason:'solved',elapsedSec:0,expanded:0});
+    const path=[],start=performance.now();let nodes=0,abort=false,timedOut=false;
+    const Ws=[1.8,2.5,3.5,5.0];const st=state0.slice();
+    function search(emp,g,bound,lastEmp,W){
+      nodes++;
+      if((nodes&0x3FFF)===0){
+        if(searchAborted){abort=true;return Infinity;}
+        if(performance.now()-start>maxTimeMs){timedOut=true;return Infinity;}
+        if(onProgress)onProgress(nodes,(performance.now()-start)/1000);
+      }
+      let hv=0;for(let i=0;i<N;i++){const v=st[i];if(v)hv+=dist[i][v-1];}
+      if(hv===0)return -1;
+      const f=g+W*hv;if(f>bound)return f;
+      let min=Infinity;const r=emp>>2,c=emp&3;
+      const dirs=[];
+      if(r>0)dirs.push(emp-4);if(r<3)dirs.push(emp+4);
+      if(c>0)dirs.push(emp-1);if(c<3)dirs.push(emp+1);
+      for(const n of dirs){
+        if(n===lastEmp)continue;
+        const v=st[n];st[emp]=v;st[n]=0;path.push(n);
+        const t=search(n,g+1,bound,emp,W);
+        if(t===-1)return -1;
+        path.pop();st[n]=v;st[emp]=0;
+        if(abort||timedOut)return Infinity;
+        if(t<min)min=t;
+      }
+      return min;
+    }
+    setTimeout(()=>{
+      try{
+        for(const W of Ws){
+          for(let i=0;i<N;i++)st[i]=state0[i];
+          path.length=0;nodes=0;
+          let bound=W*h(st);
+          while(true){
+            if(searchAborted)throw 'aborted';
+            if(performance.now()-start>maxTimeMs)throw 'timeout';
+            const t=search(empty0,0,bound,-1,W);
+            if(t===-1)return resolve({solution:path.slice(),reason:'found',elapsedSec:(performance.now()-start)/1000,expanded:nodes});
+            if(abort)return resolve({solution:null,reason:'aborted',elapsedSec:(performance.now()-start)/1000,expanded:nodes});
+            if(timedOut)return resolve({solution:null,reason:'timeout',elapsedSec:(performance.now()-start)/1000,expanded:nodes});
+            if(t===Infinity)return resolve({solution:null,reason:'exhausted',elapsedSec:(performance.now()-start)/1000,expanded:nodes});
+            if(performance.now()-start>maxTimeMs)throw 'timeout';
+            bound=t;
+          }
+        }
+      }catch(e){
+        const reason=e==='aborted'?'aborted':e==='timeout'?'timeout':'error';
+        return resolve({solution:null,reason,elapsedSec:(performance.now()-start)/1000,expanded:nodes});
+      }
+      resolve({solution:null,reason:'exhausted',elapsedSec:(performance.now()-start)/1000,expanded:nodes});
+    },30);
+  });
+}
+
+/* ========== Метод бусинок для фазы 1 ========== */
+function placeBead(state,startEmpty,targetCell,beadValue,lockedSet){
+  let beadPos=-1;
+  for(let i=0;i<N;i++)if(state[i]===beadValue){beadPos=i;break;}
+  if(beadPos<0)return null;
+  if(beadPos===targetCell)return [];
+
+  const KEY=(e,t)=>e*N+t;
+  const startKey=KEY(startEmpty,beadPos);
+  const visited=new Uint8Array(N*N);
+  const parent=new Int16Array(N*N).fill(-1);
+  const viaMove=new Int8Array(N*N).fill(-1);
+  visited[startKey]=1;
+  const queue=new Int32Array(N*N);let qh=0,qt=0;
+  queue[qt++]=startKey;
+  let goalKey=-1;
+
+  while(qh<qt){
+    const key=queue[qh++];
+    const e=(key/N)|0,t=key%N;
+    if(t===targetCell){goalKey=key;break;}
+    const r=e>>2,c=e&3;
+    const ns=[];
+    if(r>0){const n=e-4;if(!lockedSet.has(n)&&isOpen(e,n))ns.push(n);}
+    if(r<3){const n=e+4;if(!lockedSet.has(n)&&isOpen(e,n))ns.push(n);}
+    if(c>0){const n=e-1;if(!lockedSet.has(n)&&isOpen(e,n))ns.push(n);}
+    if(c<3){const n=e+1;if(!lockedSet.has(n)&&isOpen(e,n))ns.push(n);}
+    for(let i=0;i<ns.length;i++){
+      const n=ns[i];
+      let ne,nt;
+      if(n===t){ne=t;nt=e;}else{ne=n;nt=t;}
+      const nk=KEY(ne,nt);
+      if(visited[nk])continue;
+      visited[nk]=1;parent[nk]=key;viaMove[nk]=n;
+      queue[qt++]=nk;
+    }
+  }
+  if(goalKey<0)return null;
+
+  const path=[];
+  let k=goalKey;
+  while(k!==startKey){path.push(viaMove[k]);k=parent[k];}
+  path.reverse();
+  return path;
+}
+
+function solvePhase1Beads(startState,startEmpty,targetCells,targetTiles,order){
+  const state=startState.slice();
+  let emp=startEmpty;
+  const moves=[];
+  const locked=new Set();
+  for(let oi=0;oi<order.length;oi++){
+    const idx=order[oi];
+    const target=targetCells[idx];
+    const value=targetTiles[idx];
+    if(state[target]===value){locked.add(target);continue;}
+    const path=placeBead(state,emp,target,value,locked);
+    if(!path)return null;
+    for(let pi=0;pi<path.length;pi++){
+      const mv=path[pi];
+      const v=state[mv];
+      state[emp]=v;state[mv]=0;moves.push(mv);emp=mv;
+    }
+    if(state[target]!==value)return null;
+    locked.add(target);
+  }
+  return {moves,state:state.slice(),empty:emp};
+}
+
+/* ========== A* с макро-ходами ========== */
+function astarWalled(startCells,startEmpty,isGoal,hFn,lockedCells,maxTimeMs,maxStates,W,macros,onProgress){
+  return new Promise(resolve=>{
+    if(isGoal(startCells))return resolve({solution:[],reason:'solved',elapsedSec:0,expanded:0,stored:0});
+    const isLocked=new Uint8Array(N);
+    for(const c of lockedCells)isLocked[c]=1;
+    const byAnchor=new Array(N);
+    for(let i=0;i<N;i++)byAnchor[i]=[];
+    if(macros)for(let i=0;i<macros.length;i++)byAnchor[macros[i].anchor].push(i);
+
+    const dist=new Array(N);
+    for(let i=0;i<N;i++){
+      const d=new Array(N).fill(-1);d[i]=0;
+      const q=[i];let head=0;
+      while(head<q.length){
+        const cur=q[head++];const r=rowOf(cur),c=colOf(cur);
+        const nbs=[];
+        if(r>0)nbs.push(cur-4);if(r<3)nbs.push(cur+4);
+        if(c>0)nbs.push(cur-1);if(c<3)nbs.push(cur+1);
+        for(const nb of nbs){if(d[nb]!==-1)continue;if(!isOpen(cur,nb))continue;d[nb]=d[cur]+1;q.push(nb);}
+      }
+      dist[i]=d;
+    }
+    for(let i=0;i<N;i++)for(let j=0;j<N;j++)if(dist[i][j]===-1)
+      return resolve({solution:null,reason:'disconnected',elapsedSec:0,expanded:0,stored:0});
+
+    const startH=hFn(startCells,dist);
+    if(startH===0)return resolve({solution:[],reason:'solved',elapsedSec:0,expanded:0,stored:0});
+
+    let tableBits=1;
+    while((1<<tableBits)<maxStates*2)tableBits++;
+    const tableSize=1<<tableBits,tableMask=tableSize-1;
+
+    let table,stateHi,stateLo,empList,gArr,hArr,fArr,parentArr,moveArr,macroIdxArr,heap;
+    try{
+      table=new Uint32Array(tableSize);
+      stateHi=new Uint32Array(maxStates);stateLo=new Uint32Array(maxStates);
+      empList=new Uint8Array(maxStates);
+      gArr=new Uint16Array(maxStates);hArr=new Uint16Array(maxStates);fArr=new Uint16Array(maxStates);
+      parentArr=new Int32Array(maxStates);moveArr=new Uint8Array(maxStates);
+      macroIdxArr=new Int32Array(maxStates);
+      heap=new Uint32Array(maxStates+4);
+    }catch(e){return resolve({solution:null,reason:'alloc_failed',elapsedSec:0,expanded:0,stored:0});}
+
+    function packHi(s){let h=0;for(let i=0;i<8;i++)h=((h<<4)|s[i])>>>0;return h;}
+    function packLo(s){let l=0;for(let i=8;i<N;i++)l=((l<<4)|s[i])>>>0;return l;}
+    function hashKey(hi,lo){let h=hi>>>0;h=Math.imul(h^(h>>>16),0x85ebca6b)>>>0;h=Math.imul(h^(h>>>13),0xc2b2ae35)>>>0;h=(h^(h>>>16))>>>0;h=(h^lo)>>>0;h=Math.imul(h^(h>>>15),0x27d4eb2f)>>>0;h=(h^(h>>>15))>>>0;return h&tableMask;}
+    let size=0;
+    function insert(hi,lo,idx){let s=hashKey(hi,lo);while(table[s]!==0)s=(s+1)&tableMask;table[s]=idx+1;}
+    function has(hi,lo){let s=hashKey(hi,lo);while(table[s]!==0){const i=table[s]-1;if(stateHi[i]===hi&&stateLo[i]===lo)return true;s=(s+1)&tableMask;}return false;}
+    let heapSize=0;
+    function heapPush(i){heap[heapSize]=i;let k=heapSize++;const fk=fArr[i];while(k>0){const p=(k-1)>>1;if(fk<fArr[heap[p]]){heap[k]=heap[p];k=p;}else break;}heap[k]=i;}
+    function heapPop(){
+      const top=heap[0];heapSize--;
+      if(heapSize===0)return top;
+      const last=heap[heapSize],lastF=fArr[last];let k=0;
+      while(true){const l=2*k+1;if(l>=heapSize)break;const r=l+1;let m=l;if(r<heapSize&&fArr[heap[r]]<fArr[heap[l]])m=r;if(fArr[heap[m]]>=lastF)break;heap[k]=heap[m];k=m;}
+      heap[k]=last;return top;
+    }
+
+    const sHi=packHi(startCells),sLo=packLo(startCells);
+    stateHi[0]=sHi;stateLo[0]=sLo;empList[0]=startEmpty;
+    gArr[0]=0;hArr[0]=startH;fArr[0]=Math.min(65535,W*startH);
+    parentArr[0]=-1;moveArr[0]=0;macroIdxArr[0]=-1;
+    size=1;heap[0]=0;heapSize=1;
+    insert(sHi,sLo,0);
+
+    const scratch=new Uint8Array(N),scratch2=new Uint8Array(N);
+    const startTime=performance.now();let iter=0;const CHUNK=4000;
+
+    function finish(solution,reason){resolve({solution,reason,elapsedSec:(performance.now()-startTime)/1000,expanded:iter,stored:size});}
+
+    function processChunk(){
+      if(searchAborted)return finish(null,'aborted');
+      if(performance.now()-startTime>maxTimeMs)return finish(null,'timeout');
+      if(iter>=maxStates)return finish(null,'state_limit');
+      const chunkEnd=Math.min(iter+CHUNK,maxStates);
+      let overflow=false;
+
+      while(iter<chunkEnd){
+        if(heapSize===0)return finish(null,'exhausted');
+        iter++;
+        const idx=heapPop();
+        const curHi=stateHi[idx],curLo=stateLo[idx];
+        const curH=hArr[idx],curEmp=empList[idx],curG=gArr[idx];
+
+        let t=curHi>>>0;
+        for(let i=7;i>=0;i--){scratch[i]=t&0xF;t=t>>>4;}
+        t=curLo>>>0;
+        for(let i=15;i>=8;i--){scratch[i]=t&0xF;t=t>>>4;}
+
+        if(isGoal(scratch)){
+          const rev=[];let p=idx;
+          while(parentArr[p]!==-1){
+            const mi=macroIdxArr[p];
+            if(mi>=0)rev.push({macro:macros[mi]});
+            else rev.push({single:moveArr[p]});
+            p=parentArr[p];
+          }
+          rev.reverse();
+          const solution=[];
+          for(const item of rev){
+            if(item.single!==undefined)solution.push(item.single);
+            else for(const m of item.macro.moves)solution.push(m);
+          }
+          return finish(solution,'found');
+        }
+
+        const r=curEmp>>2,c=curEmp&3,newG=curG+1;
+
+        for(let d=0;d<4;d++){
+          let nr=r,nc=c;
+          if(d===0)nr--;else if(d===1)nr++;else if(d===2)nc--;else nc++;
+          if(nr<0||nr>=SIZE||nc<0||nc>=SIZE)continue;
+          const n=nr*SIZE+nc;
+          if(isLocked[n]||!isOpen(curEmp,n))continue;
+          const v=scratch[n];
+          scratch[curEmp]=v;scratch[n]=0;
+          const cHi=packHi(scratch),cLo=packLo(scratch);
+          scratch[n]=v;scratch[curEmp]=0;
+          if(has(cHi,cLo))continue;
+          if(size>=maxStates){overflow=true;break;}
+          const delta=dist[curEmp][v-1]-dist[n][v-1];
+          const childH=curH+delta;
+          if(childH<0)continue;
+          if(childH>65535)continue;
+          const ci=size++;
+          stateHi[ci]=cHi;stateLo[ci]=cLo;
+          empList[ci]=n;gArr[ci]=Math.min(65535,newG);hArr[ci]=childH;
+          fArr[ci]=Math.min(65535,newG+W*childH);
+          parentArr[ci]=idx;moveArr[ci]=n;macroIdxArr[ci]=-1;
+          insert(cHi,cLo,ci);
+          heapPush(ci);
+        }
+        if(overflow)break;
+
+        const applicable=byAnchor[curEmp];
+        for(let ai=0;ai<applicable.length;ai++){
+          const mi=applicable[ai];
+          const macro=macros[mi];
+          for(let k=0;k<N;k++)scratch2[k]=scratch[k];
+          let emp2=curEmp,okPath=true;
+          for(const mv of macro.moves){
+            if(!isOpen(emp2,mv)){okPath=false;break;}
+            if(isLocked[mv]){okPath=false;break;}
+            const v=scratch2[mv];
+            scratch2[emp2]=v;scratch2[mv]=0;
+            emp2=mv;
+          }
+          if(!okPath||emp2!==curEmp)continue;
+          const cHi=packHi(scratch2),cLo=packLo(scratch2);
+          if(has(cHi,cLo))continue;
+          if(size>=maxStates){overflow=true;break;}
+          const childH=hFn(scratch2,dist);
+          if(childH>65535)continue;
+          const childG=curG+macro.moves.length;
+          if(childG>65535)continue;
+          const ci=size++;
+          stateHi[ci]=cHi;stateLo[ci]=cLo;
+          empList[ci]=curEmp;
+          gArr[ci]=Math.min(65535,childG);hArr[ci]=childH;
+          fArr[ci]=Math.min(65535,childG+W*childH);
+          parentArr[ci]=idx;moveArr[ci]=0;macroIdxArr[ci]=mi;
+          insert(cHi,cLo,ci);
+          heapPush(ci);
+        }
+        if(overflow)break;
+      }
+      if(overflow)return finish(null,'state_limit');
+      if(onProgress)onProgress(iter,(performance.now()-startTime)/1000,W,size,getMemMB());
+      setTimeout(processChunk,0);
+    }
+    setTimeout(processChunk,0);
+  });
+}
+
+function computeTraps(lockedCells){
+  const removed=new Set(lockedCells),traps=[];
+  let changed=true;
+  while(changed){
+    changed=false;
+    for(let c=0;c<N;c++){
+      if(removed.has(c))continue;
+      const r=rowOf(c),col=colOf(c);
+      const nbs=[];
+      if(r>0)nbs.push(c-4);if(r<3)nbs.push(c+4);
+      if(col>0)nbs.push(c-1);if(col<3)nbs.push(c+1);
+      let deg=0;
+      for(const nb of nbs){if(removed.has(nb))continue;if(!isOpen(c,nb))continue;deg++;}
+      if(deg<=1){traps.push(c);removed.add(c);changed=true;}
+    }
+  }
+  return traps;
+}
+
+function findShortCycles(maxLen,lockedSet){
+  const cycles=[],seen=new Set();
+  function neighborsFree(i){
+    const r=i>>2,c=i&3;const out=[];
+    if(r>0){const n=i-4;if(!lockedSet.has(n)&&isOpen(i,n))out.push(n);}
+    if(r<3){const n=i+4;if(!lockedSet.has(n)&&isOpen(i,n))out.push(n);}
+    if(c>0){const n=i-1;if(!lockedSet.has(n)&&isOpen(i,n))out.push(n);}
+    if(c<3){const n=i+1;if(!lockedSet.has(n)&&isOpen(i,n))out.push(n);}
+    return out;
+  }
+  function canonical(path){
+    const n=path.length;
+    const rev=[path[0]].concat(path.slice(1).reverse());
+    let best=null;
+    for(const p of [path,rev])for(let r=0;r<n;r++){
+      const key=p.slice(r).concat(p.slice(0,r)).join(',');
+      if(best===null||key<best)best=key;
+    }
+    return best;
+  }
+  for(let start=0;start<N;start++){
+    if(lockedSet.has(start))continue;
+    const path=[start],inPath=new Set([start]);
+    function dfs(cur){
+      for(const nb of neighborsFree(cur)){
+        if(nb===start){
+          if(path.length>=4&&path.length<=maxLen){
+            const key=canonical(path);
+            if(!seen.has(key)){seen.add(key);cycles.push(path.slice());}
+          }
+        }else if(!inPath.has(nb)&&path.length<maxLen){
+          inPath.add(nb);path.push(nb);dfs(nb);path.pop();inPath.delete(nb);
+        }
+      }
+    }
+    dfs(start);
+  }
+  return cycles;
+}
+
+/* ========== Двухфазный решатель ========== */
+async function solveWalledPhased(onProgress){
+  const origCells=cells.slice(),origEmpty=empty;
+  const p1=PHASE1[mode]||PHASE1.classic;
+  const cfg=CFG[mode]||CFG.classic;
+
+  const traps=computeTraps(p1.cells);
+  const trapGoal=new Uint8Array(N).fill(255);
+  for(const t of traps)trapGoal[t]=(t===N-1)?0:(t+1);
+
+  if(onProgress)onProgress({phase:0,p1Cells:p1.cells.slice(),traps:traps.slice()});
+
+  const p1AllCells=p1.cells.concat(traps);
+  const p1AllTiles=p1.tiles.concat(traps.map(t=>(t===N-1)?0:(t+1)));
+
+  let sol1=null,method='beads';
+
+  /* --- Попытка 1: бусинки --- */
+  const L=p1AllCells.length;
+  const orders=[];
+  orders.push(Array.from({length:L},(_,i)=>i));
+  if(L>1)orders.push(Array.from({length:L},(_,i)=>L-1-i));
+  if(L>=5){
+    const trapStart=p1.cells.length;
+    const ordTF=[],ordTL=[];
+    for(let i=trapStart;i<L;i++)ordTF.push(i);
+    for(let i=0;i<trapStart;i++)ordTF.push(i);
+    for(let i=0;i<trapStart;i++)ordTL.push(i);
+    for(let i=trapStart;i<L;i++)ordTL.push(i);
+    orders.push(ordTF);
+    orders.push(ordTL);
+  }
+  if(L===6){
+    orders.push([2,1,0,5,4,3]);
+    orders.push([0,2,1,3,4,5]);
+  }
+
+  for(let oi=0;oi<orders.length;oi++){
+    if(searchAborted)return {solution:null,reason:'aborted'};
+    if(onProgress)onProgress({phase:'bead1',attempt:oi+1,total:orders.length});
+    restore(origCells,origEmpty);
+    const r=solvePhase1Beads(cells.slice(),empty,p1AllCells,p1AllTiles,orders[oi]);
+    if(r){sol1=r.moves;method='beads';break;}
+  }
+
+  /* --- Попытка 2: A* как резерв --- */
+  if(!sol1){
+    method='astar';
+    const goalFn=st=>{
+      for(let k=0;k<p1AllCells.length;k++){
+        if(st[p1AllCells[k]]!==p1AllTiles[k])return false;
+      }
+      return true;
+    };
+    const hFn=(st,dist)=>{
+      let h=0;
+      for(let k=0;k<p1AllCells.length;k++){
+        const cell=p1AllCells[k],target=p1AllTiles[k],cur=st[cell];
+        if(cur===target)continue;
+        let pos=-1;
+        for(let j=0;j<N;j++)if(st[j]===target){pos=j;break;}
+        if(pos>=0)h+=dist[pos][cell];
+        if(cur)h+=2;
+      }
+      for(const t of traps){
+        const target=trapGoal[t];
+        if(st[t]===target)continue;
+        let pos=-1;
+        for(let j=0;j<N;j++)if(st[j]===target){pos=j;break;}
+        if(pos>=0)h+=dist[pos][t];
+        h+=4;
+      }
+      return h;
+    };
+    for(const W of cfg.p1W){
+      if(searchAborted)return {solution:null,reason:'aborted'};
+      if(onProgress)onProgress({phase:1,W});
+      restore(origCells,origEmpty);
+      const r=await astarWalled(
+        cells.slice(),empty,goalFn,hFn,[],
+        cfg.p1T,cfg.p1S,W,null,
+        (it,sec,w,stored,mem)=>{if(onProgress)onProgress({phase:1,iter:it,sec,W:w,stored,mem});}
+      );
+      if(searchAborted)return {solution:null,reason:'aborted'};
+      if(r.solution){sol1=r.solution;break;}
+    }
+  }
+
+  if(!sol1){restore(origCells,origEmpty);return {solution:null,reason:'phase1_failed'};}
+
+  /* Применяем фазу 1 */
+  restore(origCells,origEmpty);
+  for(const mv of sol1){
+    if(!canMoveTo(mv,empty)){restore(origCells,origEmpty);return {solution:null,reason:'phase1_apply_failed'};}
+    applyMove(mv,empty);
+  }
+  for(let k=0;k<p1AllCells.length;k++){
+    if(cells[p1AllCells[k]]!==p1AllTiles[k]){restore(origCells,origEmpty);return {solution:null,reason:'phase1_verify_failed'};}
+  }
+
+  /* --- ФАЗА 2 --- */
+  const phase2Locked=p1AllCells.slice();
+  const phase2LockedSet=new Set(phase2Locked);
+
+  const p2Goal=st=>{
+    for(let c=0;c<N;c++){
+      if(phase2LockedSet.has(c))continue;
+      if(c===N-1){if(st[c]!==0)return false;}
+      else if(st[c]!==c+1)return false;
+    }
+    return true;
+  };
+  const p2H=(st,dist)=>{
+    let h=0;
+    for(let c=0;c<N;c++){
+      if(phase2LockedSet.has(c))continue;
+      const v=st[c];if(!v)continue;
+      h+=dist[c][v-1];
+    }
+    return h;
+  };
+
+  const maxCycleLen=N-phase2Locked.length;
+  const cycles=findShortCycles(maxCycleLen,phase2LockedSet);
+  const macros=[];
+  for(const cyc of cycles){
+    const Lc=cyc.length;
+    for(let ap=0;ap<Lc;ap++){
+      const mvs=[];
+      for(let k=1;k<=Lc;k++)mvs.push(cyc[(ap+k)%Lc]);
+      macros.push({anchor:cyc[ap],moves:mvs});
+    }
+  }
+  console.log('[Solver] mode='+mode+' phase1='+method+' free='+(N-phase2Locked.length)+' cycles='+cycles.length+' macros='+macros.length);
+  if(onProgress)onProgress({phase:'macros',count:macros.length,cycles:cycles.length});
+
+  let lastPhase2Reason=null;
+  for(const W of cfg.p2W){
+    if(searchAborted)return {solution:null,reason:'aborted'};
+    if(onProgress)onProgress({phase:2,W,macroCount:macros.length});
+    const r=await astarWalled(
+      cells.slice(),empty,p2Goal,p2H,phase2Locked,
+      cfg.p2T,cfg.p2S,W,macros,
+      (it,sec,w,stored,mem)=>{if(onProgress)onProgress({phase:2,iter:it,sec,W:w,stored,mem,macroCount:macros.length});}
+    );
+    if(searchAborted)return {solution:null,reason:'aborted'};
+    if(r.solution){
+      restore(origCells,origEmpty);
+      return {
+        solution:sol1.concat(r.solution),
+        reason:'found',
+        phase1Len:sol1.length,
+        phase2Len:r.solution.length,
+        method:method,
+        cycles:cycles.length,
+        macros:macros.length
+      };
+    }
+    lastPhase2Reason='phase2_'+r.reason;
+    if(r.reason==='exhausted')break;
+    if(r.reason!=='timeout'&&r.reason!=='state_limit')break;
+  }
+
+  restore(origCells,origEmpty);
+  return {solution:null,reason:lastPhase2Reason||'all_failed'};
+}
+
+function restore(c,e){
+  for(let i=0;i<N;i++)cells[i]=c[i];
+  empty=e;
+}
+
+function setSolveButtonIdle(){
+  solveBtn.innerHTML='<span class="ico">'+SVG_PLAY+'</span>Решить';
+  solveBtn.classList.add('solve');solveBtn.classList.remove('stop');
+  solveBtn.dataset.state='idle';
+}
+function setSolveButtonStop(){
+  solveBtn.innerHTML='<span class="ico">'+SVG_STOP+'</span>Стоп';
+  solveBtn.classList.add('stop');solveBtn.classList.remove('solve');
+  solveBtn.dataset.state='stop';
+}
+
+function animateSolution(solution){
+  const clean=[];
+  for(const m of solution)if(typeof m==='number'&&m>=0&&m<N)clean.push(m);
+  solution=clean;
+  if(!solution.length){setSolveButtonIdle();updateButtons();resetHint();return;}
+  animating=true;setSolveButtonStop();updateButtons();
+  let i=0;
+  const delay=Math.max(15,Math.min(110,Math.floor(7000/Math.max(1,solution.length))));
+  function step(){
+    if(!animating){animationTimer=null;setSolveButtonIdle();updateButtons();resetHint();return;}
+    if(i>=solution.length){animating=false;animationTimer=null;setSolveButtonIdle();updateButtons();resetHint();return;}
+    const from=solution[i++];
+    if(!canMoveTo(from,empty)){
+      animating=false;animationTimer=null;setSolveButtonIdle();updateButtons();
+      setHint('Решение прервано на ходу '+i+' из '+solution.length+'.','error');
+      return;
+    }
+    const to=empty;
+    applyMove(from,to);
+    history.push({from,to});redoStack.length=0;
+    if(!timerOn)startTimer();
+    render();checkWin();
+    if(solved){animating=false;animationTimer=null;setSolveButtonIdle();updateButtons();resetHint();return;}
+    animationTimer=setTimeout(step,delay);
+  }
+  animationTimer=setTimeout(step,60);
+}
+
+function startSolving(){
+  if(solved||animating||busy)return;
+  if(isSolvedLayout()){showToast('Доска уже собрана — нажмите «Перемешать»');return;}
+  busy=true;searchAborted=false;
+  setSolveButtonStop();updateButtons();
+
+  if(mode==='classic'){
+    setHint('Решаю (IDA*)…','search');
+    solveClassicIDA(300000,(nodes,sec)=>{
+      if(searchAborted)return;
+      setHint('Решаю (IDA*)…\n'+nodes.toLocaleString('ru-RU')+' узлов · '+sec.toFixed(1)+' с','search');
+    }).then(res=>{
+      if(searchAborted){busy=false;setSolveButtonIdle();updateButtons();resetHint();return;}
+      busy=false;
+      const dt=res.elapsedSec.toFixed(1),expanded=res.expanded.toLocaleString('ru-RU');
+      if(!res.solution){
+        setSolveButtonIdle();updateButtons();
+        const why=res.reason==='timeout'?'истекло время':res.reason==='exhausted'?'решения нет':'причина неизвестна';
+        setHint('Решение не найдено — '+why+'.\nУзлов: '+expanded+', время: '+dt+' с.','error');
+        return;
+      }
+      if(!res.solution.length){setSolveButtonIdle();updateButtons();resetHint();return;}
+      setHint('Решение найдено ('+res.solution.length+' ходов, '+dt+' с). Показ…','success');
+      animateSolution(res.solution);
+    });
+    return;
+  }
+
+  setHint('Анализ доски…','search');
+  setTimeout(()=>{
+    if(searchAborted){busy=false;setSolveButtonIdle();updateButtons();resetHint();return;}
+    solveWalledPhased(info=>{
+      if(searchAborted)return;
+      const memTxt=(info.mem!==null&&info.mem!==undefined)?' · '+info.mem+' МБ':'';
+      if(info.phase===0){
+        const p1Txt=info.p1Cells.map(c=>c+1).join(', ');
+        const trapsTxt=info.traps.length?' · тупиков: '+info.traps.length:'';
+        setHint('Анализ доски:\nфаза 1 — клетки '+p1Txt+trapsTxt,'search');
+      }else if(info.phase==='bead1'){
+        setHint('Фаза 1 (бусинки): попытка '+(info.attempt||1)+' из '+(info.total||'?')+'…','search');
+      }else if(info.phase===1){
+        if(info.iter!==undefined){
+          setHint('Фаза 1 (A*), W='+(info.W||'')+':\n'+info.iter.toLocaleString('ru-RU')+' состояний · '+info.sec.toFixed(1)+' с'+memTxt,'search');
+        }else setHint('Фаза 1 (A*), W='+(info.W||'')+'…','search');
+      }else if(info.phase==='macros'){
+        setHint('Найдено циклов: '+info.cycles+'\nмакро-ходов: '+info.count,'search');
+      }else if(info.phase===2){
+        const macTxt=info.macroCount?' · макро: '+info.macroCount:'';
+        if(info.iter!==undefined){
+          setHint('Фаза 2, W='+(info.W||'')+macTxt+':\n'+info.iter.toLocaleString('ru-RU')+' состояний · '+info.sec.toFixed(1)+' с'+memTxt,'search');
+        }else setHint('Фаза 2, W='+(info.W||'')+macTxt+'…','search');
+      }
+    }).then(res=>{
+      if(searchAborted){busy=false;setSolveButtonIdle();updateButtons();resetHint();return;}
+      busy=false;
+      if(!res.solution){
+        setSolveButtonIdle();updateButtons();
+        let why='';
+        if(res.reason==='timeout')why='истекло время';
+        else if(res.reason==='aborted')why='остановлено';
+        else if(res.reason==='exhausted')why='пространство исчерпано';
+        else if(res.reason==='all_failed')why='все попытки исчерпаны';
+        else if(res.reason==='alloc_failed')why='не хватило памяти';
+        else if(res.reason==='phase1_failed')why='фаза 1 не удалась';
+        else if(res.reason==='phase1_apply_failed')why='фаза 1: не удалось применить';
+        else if(res.reason==='phase1_verify_failed')why='фаза 1: проверка не прошла';
+        else if(res.reason==='disconnected')why='граф клеток разорван';
+        else if(res.reason&&res.reason.startsWith('phase1_'))why='фаза 1 не удалась ('+res.reason.slice(7)+')';
+        else if(res.reason&&res.reason.startsWith('phase2_'))why='фаза 2 не удалась ('+res.reason.slice(7)+')';
+        else why=res.reason||'причина неизвестна';
+        setHint('Решение не найдено — '+why+'.','error');
+        return;
+      }
+      if(!res.solution.length){setSolveButtonIdle();updateButtons();resetHint();return;}
+      const phaseInfo=' (фаза 1: '+res.phase1Len+', '+res.method+', фаза 2: '+res.phase2Len+', макро: '+res.macros+')';
+      setHint('Решение найдено ('+res.solution.length+' ходов'+phaseInfo+'). Показ…','success');
+      animateSolution(res.solution);
+    }).catch(err=>{
+      console.error(err);
+      busy=false;setSolveButtonIdle();updateButtons();
+      setHint('Ошибка решателя: '+err,'error');
+    });
+  },50);
+}
+
+function stopSolving(){
+  searchAborted=true;
+  if(animationTimer!==null){clearTimeout(animationTimer);animationTimer=null;}
+  animating=false;busy=false;
+  setSolveButtonIdle();updateButtons();resetHint();
+  showToast('Остановлено');
+}
+function onSolveButtonClick(){
+  if(solveBtn.dataset.state==='stop')stopSolving();
+  else startSolving();
+}
+
+function init(){
+  createTiles();setMode('classic');measure();newGame(false);
+  if(window.ResizeObserver){const ro=new ResizeObserver(measure);ro.observe(boardEl);}
+  else window.addEventListener('resize',measure);
+
+  boardEl.addEventListener('pointerdown',onPointerDown);
+  boardEl.addEventListener('pointermove',onPointerMove);
+  boardEl.addEventListener('pointerup',onPointerUp);
+  boardEl.addEventListener('pointercancel',onPointerUp);
+  boardEl.addEventListener('contextmenu',e=>e.preventDefault());
+
+  undoBtn.addEventListener('click',undo);
+  redoBtn.addEventListener('click',redo);
+  scrambleBtn.addEventListener('click',()=>{if(!busy&&!animating)newGame(true);});
+  resetBtn.addEventListener('click',resetToSolved);
+  solveBtn.addEventListener('click',onSolveButtonClick);
+  winBtn.addEventListener('click',()=>newGame(true));
+
+  modesEl.addEventListener('click',e=>{
+    const btn=e.target.closest('.mode-btn');
+    if(!btn||btn.disabled)return;
+    if(btn.dataset.mode===mode)return;
+    setMode(btn.dataset.mode);resetToSolved();
+  });
+
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'&&solveBtn.dataset.state==='stop'){e.preventDefault();stopSolving();return;}
+    if(busy||animating)return;
+    if(e.key==='z'&&(e.ctrlKey||e.metaKey)&&!e.shiftKey){e.preventDefault();undo();}
+    else if((e.key==='y'&&(e.ctrlKey||e.metaKey))||(e.key==='z'&&(e.ctrlKey||e.metaKey)&&e.shiftKey)){e.preventDefault();redo();}
+    else if(e.key==='r'||e.key==='R'){resetToSolved();}
+    else if(e.key==='n'||e.key==='N'){newGame(true);}
+    else if(e.key==='s'||e.key==='S'){e.preventDefault();startSolving();}
+  });
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
+else init();
+})();
+</script>
+</body>
+</html>
