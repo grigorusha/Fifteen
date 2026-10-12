@@ -293,6 +293,7 @@ function groupMove(clicked){
   let cur=clicked;
   while(cur!==empty){path.push(cur);cur=cur+step;}
   let moved=0;
+  const startLen=history.length;
   for(let k=path.length-1;k>=0;k--){
     const from=path[k],to=empty;
     if(!canMoveTo(from,to))break;
@@ -304,7 +305,7 @@ function groupMove(clicked){
   redoStack.length=0;
   if(!timerOn)startTimer();
   render();checkWin();
-  return true;
+  return moved;
 }
 function undo(){if(busy||animating||solved||!history.length)return;const m=history.pop();applyMove(m.to,m.from);redoStack.push(m);render();}
 function redo(){if(busy||animating||solved||!redoStack.length)return;const m=redoStack.pop();applyMove(m.from,m.to);history.push(m);render();}
@@ -354,7 +355,6 @@ function hitTest(cx,cy){
   if(r<0||r>3||c<0||c>3)return -1;
   return cellIndex(r,c);
 }
-/* То же самое, но в координатах платы (без rect.left/top) */
 function hitTestAt(x,y){
   const{pad,cell,gap}=metrics,step=cell+gap;
   const c=Math.round((x-pad-cell/2)/step),r=Math.round((y-pad-cell/2)/step);
@@ -362,7 +362,22 @@ function hitTestAt(x,y){
   return cellIndex(r,c);
 }
 
-/* ============ ВВОД ============ */
+/* ============================================================
+   ВВОД
+   ---------------------------------------------------------
+   Обычный drag (плитка рядом с пустой):
+     - клик (без движения) над плиткой → ход.
+     - перетащил на пустую → ход.
+     - перетащил и вернул на исходную / в любое другое место → без хода.
+   Групповой drag (плитка не рядом, но пустая на её линии):
+     - потянул в сторону пустой → один групповой сдвиг (все плитки
+       между кликом и пустой переехали на 1). После этого режим
+       переключается на обычный.
+     - если плитку в итоге отпустили на её ИСХОДНОЙ клетке (то есть
+       вернули назад) — её собственный ход в составе группы
+       откатывается, счётчик считает только реально сдвинувшиеся
+       соседние плитки.
+   ============================================================ */
 function onPointerDown(e){
   if(solved||busy||animating)return;
   if(e.pointerType==='mouse'&&e.button!==0)return;
@@ -379,6 +394,7 @@ function onPointerDown(e){
   dragging={
     id:e.pointerId,
     index:i,
+    originalIndex:i,
     tileValue:cells[i],
     offsetX:px-p.x,
     offsetY:py-p.y,
@@ -386,7 +402,10 @@ function onPointerDown(e){
     startPy:py,
     moved:false,
     mode: adjacent ? 'regular' : 'group',
-    step: step
+    step: step,
+    groupShifted:false,
+    groupHistoryStart:-1,
+    groupMovedCount:0
   };
 
   try{boardEl.setPointerCapture(e.pointerId);}catch(_){}
@@ -409,12 +428,10 @@ function onPointerMove(e){
   }
   if(!dragging.moved)return;
 
-  /* Плитка всегда следует за курсором */
   const tx=px-dragging.offsetX;
   const ty=py-dragging.offsetY;
   tiles[dragging.tileValue].style.transform=`translate3d(${tx}px,${ty}px,0)`;
 
-  /* Если это групповой режим — проверяем, не пора ли сдвинуть группу */
   if(dragging.mode==='group'){
     const dx=px-dragging.startPx;
     const dy=py-dragging.startPy;
@@ -425,11 +442,14 @@ function onPointerMove(e){
     else if(dragging.step===-4) signed=-dy;
 
     if(signed > metrics.cell*0.5){
-      if(groupMove(dragging.index)){
-        /* Группа сдвинулась. Плитка теперь на новой клетке,
-           которая снова соседствует с пустой — переходим в обычный режим. */
+      const before=history.length;
+      const moved=groupMove(dragging.index);
+      if(moved){
+        dragging.groupHistoryStart=before;
+        dragging.groupMovedCount=moved;
+        dragging.groupShifted=true;
         dragging.index += dragging.step;
-        dragging.mode = 'regular';
+        dragging.mode='regular';
         const p2=positionOf(dragging.index);
         dragging.offsetX = px - p2.x;
         dragging.offsetY = py - p2.y;
@@ -446,26 +466,25 @@ function onPointerUp(e){
   const d=dragging;dragging=null;
   const el=tiles[d.tileValue];el.classList.remove('is-dragging');
   try{boardEl.releasePointerCapture(e.pointerId);}catch(_){}
-
-  const wasClick=!d.moved;
   el.style.transition='';void el.offsetWidth;
 
-  const returnTo = (idx)=>{
+  const wasClick=!d.moved;
+
+  const returnTo=(idx)=>{
     const p=positionOf(idx);
     el.style.transform=`translate3d(${p.x}px,${p.y}px,0)`;
   };
 
-  /* --- Групповой режим: сдвиг группы не произошёл --- */
+  /* --- Групповой режим, сдвиг не произошёл --- */
   if(d.mode==='group'){
     if(wasClick){
       if(groupMove(d.index)) return;
     }
-    /* не сдвинулись — просто возвращаем на место */
     returnTo(d.index);
     return;
   }
 
-  /* --- Регулярный режим: клик без движения --- */
+  /* --- Клик без движения --- */
   if(wasClick){
     if(!userMove(d.index)){
       if(!groupMove(d.index)){
@@ -475,28 +494,39 @@ function onPointerUp(e){
     return;
   }
 
-  /* --- Был drag. Определяем целевую клетку по ЦЕНТРУ ПЛИТКИ,
-         а не по курсору (курсор может быть смещён от центра плитки). --- */
+  /* --- Был drag. Определяем целевую клетку по центру плитки. --- */
   const rect=boardEl.getBoundingClientRect();
-  const px=e.clientX-rect.left;
-  const py=e.clientY-rect.top;
+  const px=e.clientX-rect.left,py=e.clientY-rect.top;
   const tileX=px - d.offsetX;
   const tileY=py - d.offsetY;
   const centerX=tileX + metrics.cell/2;
   const centerY=tileY + metrics.cell/2;
-  const tc=hitTestAt(centerX, centerY);
+  const tc=hitTestAt(centerX,centerY);
 
   const droppedOnEmpty = (tc===empty) && canMoveTo(d.index, empty);
-  const droppedBack    = (tc===d.index);
 
   if(droppedOnEmpty){
-    if(!userMove(d.index)){
+    const ok=userMove(d.index);
+    if(ok){
+      /* Проверяем случай «после группового сдвига плитку вернули на её
+         исходную клетку». Если да — откатываем её собственные ходы
+         (в составе группы и возврат). В истории остаются только
+         сдвиги соседних плиток. */
+      if(d.groupShifted && tc===d.originalIndex && d.groupHistoryStart>=0){
+        history.pop(); /* возврат этой плитки */
+        const removeIdx=d.groupHistoryStart + d.groupMovedCount - 1;
+        if(removeIdx>=0 && removeIdx<history.length){
+          history.splice(removeIdx,1); /* её собственный ход в составе группы */
+        }
+        render();
+      }
+    } else {
       returnTo(d.index);
     }
     return;
   }
 
-  /* Отпустили над исходной (или где угодно ещё) — без хода */
+  /* Отпустили не туда — без хода. */
   returnTo(d.index);
 }
 
