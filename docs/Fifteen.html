@@ -116,8 +116,8 @@
           <button class="btn solve" id="solveBtn"><span class="ico"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5 L13.5 8 L4 13.5 Z"/></svg></span>Решить</button>
         </div>
       </div>
-      <p class="hint" id="hintText">Тяните плитку на пустую клетку — или просто кликните по ней.
-Перегородки не пропускают плитки.</p>
+      <p class="hint" id="hintText">Тяните плитку на пустую клетку — или кликните по ней.
+Если пустая на одной линии — потяните в её сторону: сдвинется вся группа.</p>
     </aside>
   </div>
   <footer class="credits">
@@ -140,7 +140,6 @@
 (function(){
 'use strict';
 
-/* ========== ТЕМА ========== */
 const THEME_KEY='15puzzle.theme';
 function applyTheme(t){
   document.documentElement.setAttribute('data-theme',t);
@@ -165,9 +164,6 @@ const MODE_WALLS={
   wallsF:[[2,6],[7,8],[11,15],[9,10]],
   wallsG:[[2,3],[14,15],[6,10],[7,11]]
 };
-/* Фаза 1 по доскам.
-   B: плитки 1,2,3,4 (верхний ряд) + 8 (клетка 7).
-   E: плитки 1,2,3,4,5,8 (совпадает с C). */
 const PHASE1={
   classic:{cells:[0,1,2,3],tiles:[1,2,3,4]},
   wallsA:{cells:[0,1,2,3],tiles:[1,2,3,4]},
@@ -188,7 +184,7 @@ const CFG={
   wallsF: {p1W:[5,3,2,1.5,1], p1T:120000, p1S:25000000, p2W:[5,3,2,1.5,1], p2T:240000, p2S:50000000},
   wallsG: {p1W:[5,3,2,1.5,1], p1T:120000, p1S:25000000, p2W:[5,3,2,1.5,1], p2T:240000, p2S:50000000}
 };
-const DEFAULT_HINT='Тяните плитку на пустую клетку — или просто кликните по ней.\nПерегородки не пропускают плитки.';
+const DEFAULT_HINT='Тяните плитку на пустую клетку — или кликните по ней.\nЕсли пустая на одной линии — потяните в её сторону: сдвинется вся группа.';
 const SVG_PLAY='<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5 L13.5 8 L4 13.5 Z"/></svg>';
 const SVG_STOP='<svg viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="3" width="10" height="10" rx="2"/></svg>';
 
@@ -216,6 +212,23 @@ function canMoveTo(from,to){
   if(dr+dc!==1)return false;
   return isOpen(from,to);
 }
+function groupStep(clicked){
+  const r=rowOf(clicked),c=colOf(clicked);
+  const er=rowOf(empty),ec=colOf(empty);
+  if(r!==er && c!==ec) return 0;
+  let step;
+  if(r===er) step = c<ec ? 1 : -1;
+  else step = r<er ? 4 : -4;
+  let cur=clicked;
+  while(cur!==empty){
+    const next=cur+step;
+    if(next<0||next>=N) return 0;
+    if(!isOpen(cur,next)) return 0;
+    cur=next;
+  }
+  return step;
+}
+
 let toastTimer=null;
 function showToast(msg){let t=document.querySelector('.toast');if(!t){t=document.createElement('div');t.className='toast';document.body.appendChild(t);}t.textContent=msg;void t.offsetWidth;t.classList.add('show');if(toastTimer)clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2800);}
 function setHint(text,kind){hintText.textContent=text;hintText.classList.remove('is-error','is-success','is-search');if(kind==='error')hintText.classList.add('is-error');else if(kind==='success')hintText.classList.add('is-success');else if(kind==='search')hintText.classList.add('is-search');}
@@ -272,6 +285,27 @@ function userMove(from){
   if(!timerOn)startTimer();
   render();checkWin();return true;
 }
+function groupMove(clicked){
+  if(solved||busy||animating)return false;
+  const step=groupStep(clicked);
+  if(!step)return false;
+  const path=[];
+  let cur=clicked;
+  while(cur!==empty){path.push(cur);cur=cur+step;}
+  let moved=0;
+  for(let k=path.length-1;k>=0;k--){
+    const from=path[k],to=empty;
+    if(!canMoveTo(from,to))break;
+    applyMove(from,to);
+    history.push({from,to});
+    moved++;
+  }
+  if(moved===0)return false;
+  redoStack.length=0;
+  if(!timerOn)startTimer();
+  render();checkWin();
+  return true;
+}
 function undo(){if(busy||animating||solved||!history.length)return;const m=history.pop();applyMove(m.to,m.from);redoStack.push(m);render();}
 function redo(){if(busy||animating||solved||!redoStack.length)return;const m=redoStack.pop();applyMove(m.from,m.to);history.push(m);render();}
 
@@ -320,43 +354,152 @@ function hitTest(cx,cy){
   if(r<0||r>3||c<0||c>3)return -1;
   return cellIndex(r,c);
 }
+/* То же самое, но в координатах платы (без rect.left/top) */
+function hitTestAt(x,y){
+  const{pad,cell,gap}=metrics,step=cell+gap;
+  const c=Math.round((x-pad-cell/2)/step),r=Math.round((y-pad-cell/2)/step);
+  if(r<0||r>3||c<0||c>3)return -1;
+  return cellIndex(r,c);
+}
+
+/* ============ ВВОД ============ */
 function onPointerDown(e){
   if(solved||busy||animating)return;
   if(e.pointerType==='mouse'&&e.button!==0)return;
   const i=hitTest(e.clientX,e.clientY);
-  if(i<0||cells[i]===0||!canMoveTo(i,empty))return;
+  if(i<0||cells[i]===0)return;
+
+  const adjacent=canMoveTo(i,empty);
+  const step=!adjacent ? groupStep(i) : 0;
+  if(!adjacent && !step) return;
+
   const rect=boardEl.getBoundingClientRect();
   const px=e.clientX-rect.left,py=e.clientY-rect.top,p=positionOf(i);
-  dragging={id:e.pointerId,index:i,tileValue:cells[i],offsetX:px-p.x,offsetY:py-p.y,startPx:px,startPy:py,moved:false};
+
+  dragging={
+    id:e.pointerId,
+    index:i,
+    tileValue:cells[i],
+    offsetX:px-p.x,
+    offsetY:py-p.y,
+    startPx:px,
+    startPy:py,
+    moved:false,
+    mode: adjacent ? 'regular' : 'group',
+    step: step
+  };
+
   try{boardEl.setPointerCapture(e.pointerId);}catch(_){}
-  const el=tiles[cells[i]];el.classList.add('is-dragging');el.style.transition='none';
+  const el=tiles[cells[i]];
+  el.style.transition='none';
+  void el.offsetWidth;
+  el.classList.add('is-dragging');
   e.preventDefault();
 }
+
 function onPointerMove(e){
   if(!dragging||e.pointerId!==dragging.id)return;
   const rect=boardEl.getBoundingClientRect();
   const px=e.clientX-rect.left,py=e.clientY-rect.top;
+
   if(!dragging.moved){
     const dx=px-dragging.startPx,dy=py-dragging.startPy;
-    const th=Math.max(12,metrics.cell*0.28);
+    const th=Math.max(8,metrics.cell*0.18);
     if(Math.hypot(dx,dy)>th)dragging.moved=true;
   }
   if(!dragging.moved)return;
-  const tx=px-dragging.offsetX,ty=py-dragging.offsetY;
+
+  /* Плитка всегда следует за курсором */
+  const tx=px-dragging.offsetX;
+  const ty=py-dragging.offsetY;
   tiles[dragging.tileValue].style.transform=`translate3d(${tx}px,${ty}px,0)`;
+
+  /* Если это групповой режим — проверяем, не пора ли сдвинуть группу */
+  if(dragging.mode==='group'){
+    const dx=px-dragging.startPx;
+    const dy=py-dragging.startPy;
+    let signed=0;
+    if(dragging.step===1)      signed= dx;
+    else if(dragging.step===-1) signed=-dx;
+    else if(dragging.step===4)  signed= dy;
+    else if(dragging.step===-4) signed=-dy;
+
+    if(signed > metrics.cell*0.5){
+      if(groupMove(dragging.index)){
+        /* Группа сдвинулась. Плитка теперь на новой клетке,
+           которая снова соседствует с пустой — переходим в обычный режим. */
+        dragging.index += dragging.step;
+        dragging.mode = 'regular';
+        const p2=positionOf(dragging.index);
+        dragging.offsetX = px - p2.x;
+        dragging.offsetY = py - p2.y;
+        dragging.startPx = px;
+        dragging.startPy = py;
+        tiles[dragging.tileValue].style.transform=`translate3d(${p2.x}px,${p2.y}px,0)`;
+      }
+    }
+  }
 }
+
 function onPointerUp(e){
   if(!dragging||e.pointerId!==dragging.id)return;
   const d=dragging;dragging=null;
   const el=tiles[d.tileValue];el.classList.remove('is-dragging');
   try{boardEl.releasePointerCapture(e.pointerId);}catch(_){}
-  const tc=hitTest(e.clientX,e.clientY);
-  const wasClick=!d.moved,droppedBack=(tc===d.index),droppedOnEmpty=(tc===empty);
+
+  const wasClick=!d.moved;
   el.style.transition='';void el.offsetWidth;
-  if(wasClick||droppedBack||droppedOnEmpty){
-    if(!userMove(d.index)){const p=positionOf(d.index);el.style.transform=`translate3d(${p.x}px,${p.y}px,0)`;}
-  }else{const p=positionOf(d.index);el.style.transform=`translate3d(${p.x}px,${p.y}px,0)`;}
+
+  const returnTo = (idx)=>{
+    const p=positionOf(idx);
+    el.style.transform=`translate3d(${p.x}px,${p.y}px,0)`;
+  };
+
+  /* --- Групповой режим: сдвиг группы не произошёл --- */
+  if(d.mode==='group'){
+    if(wasClick){
+      if(groupMove(d.index)) return;
+    }
+    /* не сдвинулись — просто возвращаем на место */
+    returnTo(d.index);
+    return;
+  }
+
+  /* --- Регулярный режим: клик без движения --- */
+  if(wasClick){
+    if(!userMove(d.index)){
+      if(!groupMove(d.index)){
+        returnTo(d.index);
+      }
+    }
+    return;
+  }
+
+  /* --- Был drag. Определяем целевую клетку по ЦЕНТРУ ПЛИТКИ,
+         а не по курсору (курсор может быть смещён от центра плитки). --- */
+  const rect=boardEl.getBoundingClientRect();
+  const px=e.clientX-rect.left;
+  const py=e.clientY-rect.top;
+  const tileX=px - d.offsetX;
+  const tileY=py - d.offsetY;
+  const centerX=tileX + metrics.cell/2;
+  const centerY=tileY + metrics.cell/2;
+  const tc=hitTestAt(centerX, centerY);
+
+  const droppedOnEmpty = (tc===empty) && canMoveTo(d.index, empty);
+  const droppedBack    = (tc===d.index);
+
+  if(droppedOnEmpty){
+    if(!userMove(d.index)){
+      returnTo(d.index);
+    }
+    return;
+  }
+
+  /* Отпустили над исходной (или где угодно ещё) — без хода */
+  returnTo(d.index);
 }
+
 function setMode(m){
   mode=m;wallSet=buildWallSet(MODE_WALLS[m]||[]);
   const btns=modesEl.querySelectorAll('.mode-btn');
@@ -426,13 +569,12 @@ function solveClassicIDA(maxTimeMs,onProgress){
   });
 }
 
-/* ========== Метод бусинок для фазы 1 ========== */
+/* ========== Метод бусинок ========== */
 function placeBead(state,startEmpty,targetCell,beadValue,lockedSet){
   let beadPos=-1;
   for(let i=0;i<N;i++)if(state[i]===beadValue){beadPos=i;break;}
   if(beadPos<0)return null;
   if(beadPos===targetCell)return [];
-
   const KEY=(e,t)=>e*N+t;
   const startKey=KEY(startEmpty,beadPos);
   const visited=new Uint8Array(N*N);
@@ -442,7 +584,6 @@ function placeBead(state,startEmpty,targetCell,beadValue,lockedSet){
   const queue=new Int32Array(N*N);let qh=0,qt=0;
   queue[qt++]=startKey;
   let goalKey=-1;
-
   while(qh<qt){
     const key=queue[qh++];
     const e=(key/N)|0,t=key%N;
@@ -464,7 +605,6 @@ function placeBead(state,startEmpty,targetCell,beadValue,lockedSet){
     }
   }
   if(goalKey<0)return null;
-
   const path=[];
   let k=goalKey;
   while(k!==startKey){path.push(viaMove[k]);k=parent[k];}
@@ -730,24 +870,19 @@ function findShortCycles(maxLen,lockedSet){
   return cycles;
 }
 
-/* ========== Двухфазный решатель ========== */
 async function solveWalledPhased(onProgress){
   const origCells=cells.slice(),origEmpty=empty;
   const p1=PHASE1[mode]||PHASE1.classic;
   const cfg=CFG[mode]||CFG.classic;
-
   const traps=computeTraps(p1.cells);
   const trapGoal=new Uint8Array(N).fill(255);
   for(const t of traps)trapGoal[t]=(t===N-1)?0:(t+1);
-
   if(onProgress)onProgress({phase:0,p1Cells:p1.cells.slice(),traps:traps.slice()});
 
   const p1AllCells=p1.cells.concat(traps);
   const p1AllTiles=p1.tiles.concat(traps.map(t=>(t===N-1)?0:(t+1)));
 
   let sol1=null,method='beads';
-
-  /* --- Попытка 1: бусинки --- */
   const L=p1AllCells.length;
   const orders=[];
   orders.push(Array.from({length:L},(_,i)=>i));
@@ -759,13 +894,9 @@ async function solveWalledPhased(onProgress){
     for(let i=0;i<trapStart;i++)ordTF.push(i);
     for(let i=0;i<trapStart;i++)ordTL.push(i);
     for(let i=trapStart;i<L;i++)ordTL.push(i);
-    orders.push(ordTF);
-    orders.push(ordTL);
+    orders.push(ordTF);orders.push(ordTL);
   }
-  if(L===6){
-    orders.push([2,1,0,5,4,3]);
-    orders.push([0,2,1,3,4,5]);
-  }
+  if(L===6){orders.push([2,1,0,5,4,3]);orders.push([0,2,1,3,4,5]);}
 
   for(let oi=0;oi<orders.length;oi++){
     if(searchAborted)return {solution:null,reason:'aborted'};
@@ -775,7 +906,6 @@ async function solveWalledPhased(onProgress){
     if(r){sol1=r.moves;method='beads';break;}
   }
 
-  /* --- Попытка 2: A* как резерв --- */
   if(!sol1){
     method='astar';
     const goalFn=st=>{
@@ -820,7 +950,6 @@ async function solveWalledPhased(onProgress){
 
   if(!sol1){restore(origCells,origEmpty);return {solution:null,reason:'phase1_failed'};}
 
-  /* Применяем фазу 1 */
   restore(origCells,origEmpty);
   for(const mv of sol1){
     if(!canMoveTo(mv,empty)){restore(origCells,origEmpty);return {solution:null,reason:'phase1_apply_failed'};}
@@ -830,10 +959,8 @@ async function solveWalledPhased(onProgress){
     if(cells[p1AllCells[k]]!==p1AllTiles[k]){restore(origCells,origEmpty);return {solution:null,reason:'phase1_verify_failed'};}
   }
 
-  /* --- ФАЗА 2 --- */
   const phase2Locked=p1AllCells.slice();
   const phase2LockedSet=new Set(phase2Locked);
-
   const p2Goal=st=>{
     for(let c=0;c<N;c++){
       if(phase2LockedSet.has(c))continue;
@@ -892,26 +1019,13 @@ async function solveWalledPhased(onProgress){
     if(r.reason==='exhausted')break;
     if(r.reason!=='timeout'&&r.reason!=='state_limit')break;
   }
-
   restore(origCells,origEmpty);
   return {solution:null,reason:lastPhase2Reason||'all_failed'};
 }
 
-function restore(c,e){
-  for(let i=0;i<N;i++)cells[i]=c[i];
-  empty=e;
-}
-
-function setSolveButtonIdle(){
-  solveBtn.innerHTML='<span class="ico">'+SVG_PLAY+'</span>Решить';
-  solveBtn.classList.add('solve');solveBtn.classList.remove('stop');
-  solveBtn.dataset.state='idle';
-}
-function setSolveButtonStop(){
-  solveBtn.innerHTML='<span class="ico">'+SVG_STOP+'</span>Стоп';
-  solveBtn.classList.add('stop');solveBtn.classList.remove('solve');
-  solveBtn.dataset.state='stop';
-}
+function restore(c,e){for(let i=0;i<N;i++)cells[i]=c[i];empty=e;}
+function setSolveButtonIdle(){solveBtn.innerHTML='<span class="ico">'+SVG_PLAY+'</span>Решить';solveBtn.classList.add('solve');solveBtn.classList.remove('stop');solveBtn.dataset.state='idle';}
+function setSolveButtonStop(){solveBtn.innerHTML='<span class="ico">'+SVG_STOP+'</span>Стоп';solveBtn.classList.add('stop');solveBtn.classList.remove('solve');solveBtn.dataset.state='stop';}
 
 function animateSolution(solution){
   const clean=[];
@@ -1042,27 +1156,23 @@ function init(){
   createTiles();setMode('classic');measure();newGame(false);
   if(window.ResizeObserver){const ro=new ResizeObserver(measure);ro.observe(boardEl);}
   else window.addEventListener('resize',measure);
-
   boardEl.addEventListener('pointerdown',onPointerDown);
   boardEl.addEventListener('pointermove',onPointerMove);
   boardEl.addEventListener('pointerup',onPointerUp);
   boardEl.addEventListener('pointercancel',onPointerUp);
   boardEl.addEventListener('contextmenu',e=>e.preventDefault());
-
   undoBtn.addEventListener('click',undo);
   redoBtn.addEventListener('click',redo);
   scrambleBtn.addEventListener('click',()=>{if(!busy&&!animating)newGame(true);});
   resetBtn.addEventListener('click',resetToSolved);
   solveBtn.addEventListener('click',onSolveButtonClick);
   winBtn.addEventListener('click',()=>newGame(true));
-
   modesEl.addEventListener('click',e=>{
     const btn=e.target.closest('.mode-btn');
     if(!btn||btn.disabled)return;
     if(btn.dataset.mode===mode)return;
     setMode(btn.dataset.mode);resetToSolved();
   });
-
   document.addEventListener('keydown',e=>{
     if(e.key==='Escape'&&solveBtn.dataset.state==='stop'){e.preventDefault();stopSolving();return;}
     if(busy||animating)return;
