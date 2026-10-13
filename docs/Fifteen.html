@@ -131,7 +131,7 @@
   <div class="theme-bar">
     <button class="theme-toggle" id="themeToggle" type="button">
       <span class="tt-ico" id="ttIco">🌙</span>
-      <span id="ttLabel">Тёмная тема</span>
+      <span id="ttLabel">Светлая тема</span>
     </button>
   </div>
 </div>
@@ -143,8 +143,17 @@
 const THEME_KEY='15puzzle.theme';
 function applyTheme(t){
   document.documentElement.setAttribute('data-theme',t);
-  document.getElementById('ttIco').textContent=t==='dark'?'🌙':'☀️';
-  document.getElementById('ttLabel').textContent=t==='dark'?'Тёмная тема':'Светлая тема';
+  const ico=document.getElementById('ttIco');
+  const lbl=document.getElementById('ttLabel');
+  if(t==='dark'){
+    /* Сейчас тёмная тема — кнопка предложит переключиться на светлую */
+    ico.textContent='☀️';
+    lbl.textContent='Светлая тема';
+  }else{
+    /* Сейчас светлая тема — кнопка предложит переключиться на тёмную */
+    ico.textContent='🌙';
+    lbl.textContent='Тёмная тема';
+  }
   try{localStorage.setItem(THEME_KEY,t);}catch(_){}
 }
 function currentTheme(){try{const s=localStorage.getItem(THEME_KEY);if(s==='dark'||s==='light')return s;}catch(_){}return 'dark';}
@@ -293,7 +302,6 @@ function groupMove(clicked){
   let cur=clicked;
   while(cur!==empty){path.push(cur);cur=cur+step;}
   let moved=0;
-  const startLen=history.length;
   for(let k=path.length-1;k>=0;k--){
     const from=path[k],to=empty;
     if(!canMoveTo(from,to))break;
@@ -362,22 +370,6 @@ function hitTestAt(x,y){
   return cellIndex(r,c);
 }
 
-/* ============================================================
-   ВВОД
-   ---------------------------------------------------------
-   Обычный drag (плитка рядом с пустой):
-     - клик (без движения) над плиткой → ход.
-     - перетащил на пустую → ход.
-     - перетащил и вернул на исходную / в любое другое место → без хода.
-   Групповой drag (плитка не рядом, но пустая на её линии):
-     - потянул в сторону пустой → один групповой сдвиг (все плитки
-       между кликом и пустой переехали на 1). После этого режим
-       переключается на обычный.
-     - если плитку в итоге отпустили на её ИСХОДНОЙ клетке (то есть
-       вернули назад) — её собственный ход в составе группы
-       откатывается, счётчик считает только реально сдвинувшиеся
-       соседние плитки.
-   ============================================================ */
 function onPointerDown(e){
   if(solved||busy||animating)return;
   if(e.pointerType==='mouse'&&e.button!==0)return;
@@ -475,7 +467,6 @@ function onPointerUp(e){
     el.style.transform=`translate3d(${p.x}px,${p.y}px,0)`;
   };
 
-  /* --- Групповой режим, сдвиг не произошёл --- */
   if(d.mode==='group'){
     if(wasClick){
       if(groupMove(d.index)) return;
@@ -484,7 +475,6 @@ function onPointerUp(e){
     return;
   }
 
-  /* --- Клик без движения --- */
   if(wasClick){
     if(!userMove(d.index)){
       if(!groupMove(d.index)){
@@ -494,7 +484,6 @@ function onPointerUp(e){
     return;
   }
 
-  /* --- Был drag. Определяем целевую клетку по центру плитки. --- */
   const rect=boardEl.getBoundingClientRect();
   const px=e.clientX-rect.left,py=e.clientY-rect.top;
   const tileX=px - d.offsetX;
@@ -508,15 +497,11 @@ function onPointerUp(e){
   if(droppedOnEmpty){
     const ok=userMove(d.index);
     if(ok){
-      /* Проверяем случай «после группового сдвига плитку вернули на её
-         исходную клетку». Если да — откатываем её собственные ходы
-         (в составе группы и возврат). В истории остаются только
-         сдвиги соседних плиток. */
       if(d.groupShifted && tc===d.originalIndex && d.groupHistoryStart>=0){
-        history.pop(); /* возврат этой плитки */
+        history.pop();
         const removeIdx=d.groupHistoryStart + d.groupMovedCount - 1;
         if(removeIdx>=0 && removeIdx<history.length){
-          history.splice(removeIdx,1); /* её собственный ход в составе группы */
+          history.splice(removeIdx,1);
         }
         render();
       }
@@ -526,7 +511,6 @@ function onPointerUp(e){
     return;
   }
 
-  /* Отпустили не туда — без хода. */
   returnTo(d.index);
 }
 
@@ -537,7 +521,6 @@ function setMode(m){
   renderWalls();
 }
 
-/* ========== Классический IDA* ========== */
 function solveClassicIDA(maxTimeMs,onProgress){
   return new Promise(resolve=>{
     const dist=new Array(N);
@@ -599,7 +582,6 @@ function solveClassicIDA(maxTimeMs,onProgress){
   });
 }
 
-/* ========== Метод бусинок ========== */
 function placeBead(state,startEmpty,targetCell,beadValue,lockedSet){
   let beadPos=-1;
   for(let i=0;i<N;i++)if(state[i]===beadValue){beadPos=i;break;}
@@ -665,7 +647,6 @@ function solvePhase1Beads(startState,startEmpty,targetCells,targetTiles,order){
   return {moves,state:state.slice(),empty:emp};
 }
 
-/* ========== A* с макро-ходами ========== */
 function astarWalled(startCells,startEmpty,isGoal,hFn,lockedCells,maxTimeMs,maxStates,W,macros,onProgress){
   return new Promise(resolve=>{
     if(isGoal(startCells))return resolve({solution:[],reason:'solved',elapsedSec:0,expanded:0,stored:0});
