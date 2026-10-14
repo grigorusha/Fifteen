@@ -23,10 +23,23 @@
   .tile.is-dragging{filter:brightness(1.04);box-shadow:0 9px 0 -2px rgba(80,95,120,.5),0 22px 34px -12px rgba(20,30,50,.85),0 0 24px -4px rgba(92,200,255,.7),inset 0 1px 0 rgba(255,255,255,.98);cursor:grabbing;z-index:5}
   .board.no-anim .tile{transition:none!important}
   .panel{display:flex;flex-direction:column;gap:14px;padding:16px;border-radius:20px;border:1px solid var(--stroke);background:var(--panel-bg);box-shadow:0 20px 44px -26px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.15);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);align-self:stretch;min-height:0;transition:background .25s,border-color .25s}
-  .panel-spacer{flex:1 1 auto;min-height:0}.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .panel-spacer{flex:1 1 auto;min-height:0}
+  .stats{display:grid;grid-template-columns:1fr 1fr auto;gap:10px}
   .stat{display:flex;flex-direction:column;gap:3px;padding:10px 12px;border-radius:14px;background:rgba(0,0,0,.05);border:1px solid var(--stroke);box-shadow:inset 0 1px 0 rgba(255,255,255,.1)}html[data-theme="dark"] .stat{background:rgba(0,0,0,.28)}
   .stat-label{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700}
   .stat-value{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;color:var(--txt)}
+  .hint-btn{
+    appearance:none; display:flex; align-items:center; justify-content:center;
+    width:48px; height:48px; border-radius:14px; cursor:pointer;
+    font-size:22px; line-height:1; padding:0; align-self:center;
+    color:var(--txt); background:linear-gradient(180deg,var(--btn-bg-1),var(--btn-bg-2));
+    border:1px solid var(--stroke);
+    box-shadow:0 6px 14px -10px rgba(0,0,0,.7), inset 0 1px 0 rgba(255,255,255,.65);
+    transition:transform .12s, background .2s, box-shadow .2s;
+  }
+  html[data-theme="dark"] .hint-btn{box-shadow:0 8px 18px -12px rgba(0,0,0,1), inset 0 1px 0 rgba(255,255,255,.28)}
+  .hint-btn:hover{background:linear-gradient(180deg,var(--btn-bg-1-hover),var(--btn-bg-2-hover));transform:translateY(-1px)}
+  .hint-btn:active{transform:translateY(1px) scale(.98)}
   .group{display:flex;flex-direction:column;gap:8px}.group-title{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:700;padding-left:3px}
   .modes{display:grid;grid-template-columns:1fr 1fr;gap:7px}
   .mode-btn{position:relative;display:flex;align-items:center;justify-content:space-between;gap:5px;padding:9px;font:inherit;font-size:11px;font-weight:650;text-align:left;color:var(--txt);background:linear-gradient(180deg,var(--btn-bg-1),var(--btn-bg-2));border:1px solid var(--stroke);border-radius:10px;cursor:pointer;transition:color .18s,background .18s,border-color .18s,box-shadow .18s,transform .12s,opacity .2s;min-width:0}
@@ -63,75 +76,143 @@
   .credits a{color:#185a9c;text-decoration:none;border-bottom:1px dotted rgba(24,90,156,.5);cursor:pointer;pointer-events:auto;transition:color .18s,border-color .18s}
   html[data-theme="dark"] .credits a{color:#9fd6ff;border-bottom-color:rgba(159,214,255,.45)}
   .credits a:hover{color:#0b3050;border-bottom-color:rgba(11,48,80,.85)}html[data-theme="dark"] .credits a:hover{color:#fff;border-bottom-color:rgba(255,255,255,.8)}
-  .theme-bar{display:flex;justify-content:center;margin-top:2px}
+  .bottom-bar{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-top:2px}
   .theme-toggle{appearance:none;font:inherit;font-size:13px;font-weight:700;color:var(--txt);padding:10px 18px;border-radius:12px;border:1px solid var(--stroke);background:linear-gradient(180deg,var(--btn-bg-1),var(--btn-bg-2));box-shadow:0 8px 18px -14px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.5);cursor:pointer;display:inline-flex;align-items:center;gap:8px;transition:background .2s,transform .12s,box-shadow .2s}
   html[data-theme="dark"] .theme-toggle{box-shadow:0 8px 18px -14px rgba(0,0,0,1),inset 0 1px 0 rgba(255,255,255,.28)}
   .theme-toggle:hover{background:linear-gradient(180deg,var(--btn-bg-1-hover),var(--btn-bg-2-hover));transform:translateY(-1px)}
   .theme-toggle:active{transform:translateY(1px) scale(.99)}.theme-toggle .tt-ico{font-size:16px;line-height:1}
+
+  /* ====== Мини-доска (подсказка) ====== */
+  /* Оверлей теперь локальный: он лежит внутри .board-area и позиционируется
+     по центру над доской. Любой клик по нему — закрывает. */
+  .mb-overlay{
+    position:absolute; inset:0; z-index:50; display:none;
+    align-items:center; justify-content:center; padding:14px;
+    background:rgba(6,10,20,.55);
+    backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+    border-radius:24px;
+    cursor:pointer;
+  }
+  .mb-overlay.show{display:flex;animation:fade .2s ease}
+  .mb-card{
+    padding:16px;border-radius:20px;
+    background:linear-gradient(180deg,var(--win-bg-1),var(--win-bg-2));
+    border:1px solid rgba(255,255,255,.18);
+    box-shadow:0 30px 60px -24px rgba(0,0,0,.9),0 0 60px -20px rgba(92,200,255,.7);
+    display:flex;flex-direction:column;align-items:center;gap:10px;
+    animation:pop .3s cubic-bezier(.2,1.5,.4,1);
+    pointer-events:none; /* чтобы любой клик шёл мимо карточки в оверлей */
+  }
+  .mb-title{
+    margin:0;font-size:13px;font-weight:800;letter-spacing:.02em;
+    color:var(--win-text);text-transform:uppercase;
+  }
+  .mb-board{
+    position:relative;width:min(56vw,240px);aspect-ratio:1/1;
+    border-radius:16px;
+    background:linear-gradient(180deg,var(--board-bg-1),var(--board-bg-2));
+    border:1px solid var(--stroke);
+    box-shadow:inset 0 1px 0 rgba(255,255,255,.35);
+    overflow:hidden;
+  }
+  .mb-cell{
+    position:absolute;
+    display:flex;align-items:center;justify-content:center;
+    font-weight:800;font-variant-numeric:tabular-nums;
+    color:#1b2230;
+    background:linear-gradient(165deg,var(--tile-1) 0%,var(--tile-2) 52%,var(--tile-3) 100%);
+    box-shadow:0 3px 0 -1px rgba(80,95,120,.55),0 6px 12px -6px rgba(20,30,50,.7),
+      inset 0 1px 0 rgba(255,255,255,.95),inset 0 -2px 0 rgba(120,142,182,.30);
+    border-radius:10px;
+  }
+  .mb-cell.mb-empty{
+    background:transparent;box-shadow:none;
+    border:1.5px dashed rgba(120,142,182,.45);
+  }
+  .mb-wall{
+    position:absolute;border-radius:5px;
+    background:linear-gradient(100deg,var(--wall-1) 0%,var(--wall-2) 25%,var(--wall-3) 42%,var(--wall-4) 55%,var(--wall-5) 78%,var(--wall-6) 100%);
+    background-size:320% 100%;
+    animation:wallFlow 3.4s ease-in-out infinite;
+    z-index:5;
+  }
   @keyframes pop{from{transform:scale(.9);opacity:0}to{transform:scale(1);opacity:1}}@keyframes fade{from{opacity:0}to{opacity:1}}
 </style>
 </head>
 <body>
 
 <div class="app">
-  <header class="topbar"><h1>Пятнашки с перегородками</h1></header>
+  <header class="topbar"><h1 id="titleEl">Пятнашки с перегородками</h1></header>
   <div class="game">
     <div class="board-area">
       <div class="board" id="board"><div class="walls-layer" id="walls"></div></div>
       <div class="win" id="win">
         <div class="win-card">
           <div class="win-emoji">🎉</div>
-          <h2>Собрано!</h2>
-          <p><span id="winMoves">0</span> ходов · <span id="winTime">00:00</span></p>
+          <h2 id="winTitleEl">Собрано!</h2>
+          <p><span id="winMoves">0</span> <span id="winMovesSuffix">ходов</span> · <span id="winTime">00:00</span></p>
           <button class="btn primary" id="winBtn">Ещё раз</button>
         </div>
       </div>
+
+      <!-- Мини-доска теперь лежит поверх игровой доски -->
+      <div class="mb-overlay" id="mbOverlay">
+        <div class="mb-card">
+          <h3 class="mb-title" id="mbTitle">Собранная доска</h3>
+          <div class="mb-board" id="mbBoard"></div>
+        </div>
+      </div>
     </div>
+
     <aside class="panel">
       <div class="stats">
-        <div class="stat"><span class="stat-label">Ходы</span><span class="stat-value" id="movesEl">0</span></div>
-        <div class="stat"><span class="stat-label">Время</span><span class="stat-value" id="timeEl">00:00</span></div>
+        <div class="stat"><span class="stat-label" id="lblMoves">Ходы</span><span class="stat-value" id="movesEl">0</span></div>
+        <div class="stat"><span class="stat-label" id="lblTime">Время</span><span class="stat-value" id="timeEl">00:00</span></div>
+        <button class="hint-btn" id="hintBtn" title="Подсказка" aria-label="Подсказка">💡</button>
       </div>
       <div class="group">
-        <div class="group-title">Режим доски</div>
+        <div class="group-title" id="lblBoardMode">Режим доски</div>
         <div class="modes" id="modes">
-          <button class="mode-btn is-active" data-mode="classic"><span>Классика</span><span class="cnt">0</span></button>
-          <button class="mode-btn" data-mode="wallsA"><span>Перегородки A</span><span class="cnt">6</span></button>
-          <button class="mode-btn" data-mode="wallsB"><span>Перегородки B</span><span class="cnt">6</span></button>
-          <button class="mode-btn" data-mode="wallsC"><span>Перегородки C</span><span class="cnt">6</span></button>
-          <button class="mode-btn" data-mode="wallsD"><span>Перегородки D</span><span class="cnt">6</span></button>
-          <button class="mode-btn" data-mode="wallsE"><span>Перегородки E</span><span class="cnt">4</span></button>
-          <button class="mode-btn" data-mode="wallsF"><span>Перегородки F</span><span class="cnt">4</span></button>
-          <button class="mode-btn" data-mode="wallsG"><span>Перегородки G</span><span class="cnt">4</span></button>
+          <button class="mode-btn is-active" data-mode="classic"><span data-i18n="mode_classic">Классика</span><span class="cnt">0</span></button>
+          <button class="mode-btn" data-mode="wallsA"><span data-i18n="mode_wallsA">Перегородки A</span><span class="cnt">6</span></button>
+          <button class="mode-btn" data-mode="wallsB"><span data-i18n="mode_wallsB">Перегородки B</span><span class="cnt">6</span></button>
+          <button class="mode-btn" data-mode="wallsC"><span data-i18n="mode_wallsC">Перегородки C</span><span class="cnt">6</span></button>
+          <button class="mode-btn" data-mode="wallsD"><span data-i18n="mode_wallsD">Перегородки D</span><span class="cnt">6</span></button>
+          <button class="mode-btn" data-mode="wallsE"><span data-i18n="mode_wallsE">Перегородки E</span><span class="cnt">4</span></button>
+          <button class="mode-btn" data-mode="wallsF"><span data-i18n="mode_wallsF">Перегородки F</span><span class="cnt">4</span></button>
+          <button class="mode-btn" data-mode="wallsG"><span data-i18n="mode_wallsG">Перегородки G</span><span class="cnt">4</span></button>
         </div>
       </div>
       <div class="panel-spacer"></div>
       <div class="group">
-        <div class="group-title">Управление</div>
+        <div class="group-title" id="lblControls">Управление</div>
         <div class="actions">
-          <button class="btn" id="undoBtn"><span class="ico">↶</span>Назад</button>
-          <button class="btn" id="redoBtn"><span class="ico">↷</span>Вперёд</button>
-          <button class="btn primary wide" id="scrambleBtn"><span class="ico">🎲</span>Перемешать</button>
-          <button class="btn" id="resetBtn"><span class="ico">↺</span>Сброс</button>
-          <button class="btn solve" id="solveBtn"><span class="ico"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5 L13.5 8 L4 13.5 Z"/></svg></span>Решить</button>
+          <button class="btn" id="undoBtn"><span class="ico">↶</span><span data-i18n="undo">Назад</span></button>
+          <button class="btn" id="redoBtn"><span class="ico">↷</span><span data-i18n="redo">Вперёд</span></button>
+          <button class="btn primary wide" id="scrambleBtn"><span class="ico">🎲</span><span data-i18n="scramble">Перемешать</span></button>
+          <button class="btn" id="resetBtn"><span class="ico">↺</span><span data-i18n="reset">Сброс</span></button>
+          <button class="btn solve" id="solveBtn"><span class="ico"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5 L13.5 8 L4 13.5 Z"/></svg></span><span data-i18n="solve">Решить</span></button>
         </div>
       </div>
-      <p class="hint" id="hintText">Тяните плитку на пустую клетку — или кликните по ней.
-Если пустая на одной линии — потяните в её сторону: сдвинется вся группа.</p>
+      <p class="hint" id="hintText"></p>
     </aside>
   </div>
   <footer class="credits">
-    <span class="credits-line">Автор головоломки и вдохновитель проекта: Николай Авилов —
+    <span class="credits-line" id="creditsAuthor">Автор головоломки и вдохновитель проекта: Николай Авилов —
       <a href="https://elementy.ru/problems/2808/Pyatnashki_s_peregorodkami" target="_blank" rel="noopener noreferrer">elementy.ru/problems/2808</a>
     </span>
-    <span class="credits-line">Разработчики: Deepseek + Grigorusha —
+    <span class="credits-line" id="creditsDevs">Разработчики: Deepseek + Grigorusha —
       <a href="https://github.com/grigorusha" target="_blank" rel="noopener noreferrer">github.com/grigorusha</a>
     </span>
   </footer>
-  <div class="theme-bar">
+  <div class="bottom-bar">
     <button class="theme-toggle" id="themeToggle" type="button">
       <span class="tt-ico" id="ttIco">🌙</span>
-      <span id="ttLabel">Светлая тема</span>
+      <span id="ttLabel">Тёмная тема</span>
+    </button>
+    <button class="theme-toggle" id="langToggle" type="button">
+      <span class="tt-ico" id="langIco">🌐</span>
+      <span id="langLabel">English</span>
     </button>
   </div>
 </div>
@@ -140,28 +221,189 @@
 (function(){
 'use strict';
 
+/* ============================================================
+   ЯЗЫК
+   ============================================================ */
+const I18N = {
+  ru: {
+    title: 'Пятнашки с перегородками',
+    movesLabel: 'Ходы', timeLabel: 'Время', hintTooltip: 'Подсказка',
+    boardModeTitle: 'Режим доски',
+    mode_classic: 'Классика',
+    mode_wallsA: 'Перегородки A', mode_wallsB: 'Перегородки B', mode_wallsC: 'Перегородки C',
+    mode_wallsD: 'Перегородки D', mode_wallsE: 'Перегородки E', mode_wallsF: 'Перегородки F', mode_wallsG: 'Перегородки G',
+    controlsTitle: 'Управление',
+    undo: 'Назад', redo: 'Вперёд', scramble: 'Перемешать', reset: 'Сброс', solve: 'Решить', stop: 'Стоп',
+    defaultHint: 'Тяните плитку на пустую клетку — или кликните по ней.\nЕсли пустая на одной линии — потяните в её сторону: сдвинется вся группа.',
+    winTitle: 'Собрано!', winMovesWord: 'ходов', winAgain: 'Ещё раз',
+    toDark: 'Тёмная тема', toLight: 'Светлая тема',
+    toEnglish: 'English', toRussian: 'Русский',
+    miniboardTitle: 'Собранная доска',
+    creditsAuthor: 'Автор головоломки и вдохновитель проекта: Николай Авилов —',
+    creditsDevs: 'Разработчики: Deepseek + Grigorusha —',
+    hAnalyze: 'Анализ доски…',
+    hAnalyzeCells: 'Анализ доски:\nфаза 1 — клетки {cells}{traps}',
+    hTraps: ' · тупиков: {n}',
+    hBeads: 'Фаза 1 (бусинки): попытка {a} из {b}…',
+    hPhase1A: 'Фаза 1 (A*), W={w}…',
+    hPhase1AProg: 'Фаза 1 (A*), W={w}:\n{s} состояний · {t} с{mem}',
+    hMacros: 'Найдено циклов: {c}\nмакро-ходов: {m}',
+    hPhase2: 'Фаза 2, W={w}{mac}…',
+    hPhase2Prog: 'Фаза 2, W={w}{mac}:\n{s} состояний · {t} с{mem}',
+    hMacSuffix: ' · макро: {n}',
+    hMemSuffix: ' · {n} МБ',
+    hFound: 'Решение найдено ({n} ходов{info}). Показ…',
+    hNotFound: 'Решение не найдено — {why}.',
+    hPhaseInfo: ' (фаза 1: {p1}, {method}, фаза 2: {p2}, макро: {macros})',
+    whyTimeout: 'истекло время', whyAborted: 'остановлено', whyExhausted: 'пространство исчерпано',
+    whyAllFailed: 'все попытки исчерпаны', whyAllocFailed: 'не хватило памяти',
+    whyP1Failed: 'фаза 1 не удалась', whyP1Apply: 'фаза 1: не удалось применить',
+    whyP1Verify: 'фаза 1: проверка не прошла', whyDisconnected: 'граф клеток разорван',
+    whyP2Prefix: 'фаза 2 не удалась ({r})',
+    whyP1Prefix: 'фаза 1 не удалась ({r})',
+    hClassicSearch: 'Решаю (IDA*)…',
+    hClassicProg: 'Решаю (IDA*)…\n{n} узлов · {t} с',
+    hClassicNoSol: 'Решение не найдено — {why}.\nУзлов: {n}, время: {t} с.',
+    whyNoSol: 'решения нет', whyUnknown: 'причина неизвестна',
+    alertScrambled: 'Доска уже собрана — нажмите «Перемешать»',
+    alertStopped: 'Остановлено',
+  },
+  en: {
+    title: 'Fifteen Puzzle with Walls',
+    movesLabel: 'Moves', timeLabel: 'Time', hintTooltip: 'Hint',
+    boardModeTitle: 'Board Mode',
+    mode_classic: 'Classic',
+    mode_wallsA: 'Walls A', mode_wallsB: 'Walls B', mode_wallsC: 'Walls C',
+    mode_wallsD: 'Walls D', mode_wallsE: 'Walls E', mode_wallsF: 'Walls F', mode_wallsG: 'Walls G',
+    controlsTitle: 'Controls',
+    undo: 'Undo', redo: 'Redo', scramble: 'Scramble', reset: 'Reset', solve: 'Solve', stop: 'Stop',
+    defaultHint: 'Drag a tile into the empty cell — or just click on it.\nIf the empty cell is in the same row/column — drag toward it to shift the whole group.',
+    winTitle: 'Solved!', winMovesWord: 'moves', winAgain: 'Play again',
+    toDark: 'Dark theme', toLight: 'Light theme',
+    toEnglish: 'English', toRussian: 'Русский',
+    miniboardTitle: 'Solved board',
+    creditsAuthor: 'Puzzle author and project inspiration: Nikolay Avilov —',
+    creditsDevs: 'Developers: Deepseek + Grigorusha —',
+    hAnalyze: 'Analyzing board…',
+    hAnalyzeCells: 'Analyzing board:\nphase 1 — cells {cells}{traps}',
+    hTraps: ' · dead ends: {n}',
+    hBeads: 'Phase 1 (beads): attempt {a} of {b}…',
+    hPhase1A: 'Phase 1 (A*), W={w}…',
+    hPhase1AProg: 'Phase 1 (A*), W={w}:\n{s} states · {t} s{mem}',
+    hMacros: 'Cycles found: {c}\nmacros: {m}',
+    hPhase2: 'Phase 2, W={w}{mac}…',
+    hPhase2Prog: 'Phase 2, W={w}{mac}:\n{s} states · {t} s{mem}',
+    hMacSuffix: ' · macros: {n}',
+    hMemSuffix: ' · {n} MB',
+    hFound: 'Solution found ({n} moves{info}). Playing…',
+    hNotFound: 'No solution — {why}.',
+    hPhaseInfo: ' (phase 1: {p1}, {method}, phase 2: {p2}, macros: {macros})',
+    whyTimeout: 'timeout', whyAborted: 'aborted', whyExhausted: 'space exhausted',
+    whyAllFailed: 'all attempts failed', whyAllocFailed: 'not enough memory',
+    whyP1Failed: 'phase 1 failed', whyP1Apply: 'phase 1: cannot apply',
+    whyP1Verify: 'phase 1: verification failed', whyDisconnected: 'cell graph is disconnected',
+    whyP2Prefix: 'phase 2 failed ({r})',
+    whyP1Prefix: 'phase 1 failed ({r})',
+    hClassicSearch: 'Solving (IDA*)…',
+    hClassicProg: 'Solving (IDA*)…\n{n} nodes · {t} s',
+    hClassicNoSol: 'No solution — {why}.\nNodes: {n}, time: {t} s.',
+    whyNoSol: 'no solution', whyUnknown: 'unknown reason',
+    alertScrambled: 'Board is already solved — press «Scramble»',
+    alertStopped: 'Stopped',
+  }
+};
+
+let lang = 'ru';
+
+function t(key, params){
+  let s = (I18N[lang] && I18N[lang][key]) || key;
+  if (params){
+    for (const k in params){
+      s = s.replace(new RegExp('\\{'+k+'\\}','g'), String(params[k]));
+    }
+  }
+  return s;
+}
+
+function sysLang(){
+  const s = (navigator.language || navigator.userLanguage || 'en').toLowerCase();
+  return s.startsWith('ru') ? 'ru' : 'en';
+}
+
+function applyLang(newLang){
+  lang = newLang;
+  try{localStorage.setItem('15puzzle.lang', lang);}catch(_){}
+  document.documentElement.setAttribute('lang', lang);
+  document.title = t('title');
+  document.getElementById('titleEl').textContent = t('title');
+  document.getElementById('lblMoves').textContent = t('movesLabel');
+  document.getElementById('lblTime').textContent = t('timeLabel');
+  document.getElementById('hintBtn').title = t('hintTooltip');
+  document.getElementById('lblBoardMode').textContent = t('boardModeTitle');
+  document.getElementById('lblControls').textContent = t('controlsTitle');
+  document.getElementById('winTitleEl').textContent = t('winTitle');
+  document.getElementById('winMovesSuffix').textContent = t('winMovesWord');
+  document.getElementById('winBtn').textContent = t('winAgain');
+  document.getElementById('mbTitle').textContent = t('miniboardTitle');
+  document.getElementById('creditsAuthor').childNodes[0].nodeValue = t('creditsAuthor') + ' ';
+  document.getElementById('creditsDevs').childNodes[0].nodeValue = t('creditsDevs') + ' ';
+  document.querySelectorAll('[data-i18n]').forEach(el=>{
+    const k = el.getAttribute('data-i18n');
+    el.textContent = t(k);
+  });
+  if (solveBtn.dataset.state === 'stop'){
+    setSolveButtonStop();
+  } else {
+    setSolveButtonIdle();
+  }
+  const langIco = document.getElementById('langIco');
+  const langLabel = document.getElementById('langLabel');
+  if (lang === 'ru'){
+    langIco.textContent = '🌐';
+    langLabel.textContent = t('toEnglish');
+  } else {
+    langIco.textContent = '🌐';
+    langLabel.textContent = t('toRussian');
+  }
+  applyTheme(document.documentElement.getAttribute('data-theme') || 'dark');
+  if (!hintText.classList.contains('is-error') && !hintText.classList.contains('is-success') && !hintText.classList.contains('is-search')){
+    resetHint();
+  }
+}
+
+function initialLang(){
+  try{
+    const s = localStorage.getItem('15puzzle.lang');
+    if (s === 'ru' || s === 'en') return s;
+  }catch(_){}
+  return sysLang();
+}
+
+/* ============================================================
+   ТЕМА
+   ============================================================ */
 const THEME_KEY='15puzzle.theme';
-function applyTheme(t){
-  document.documentElement.setAttribute('data-theme',t);
+function applyTheme(th){
+  document.documentElement.setAttribute('data-theme',th);
   const ico=document.getElementById('ttIco');
   const lbl=document.getElementById('ttLabel');
-  if(t==='dark'){
-    /* Сейчас тёмная тема — кнопка предложит переключиться на светлую */
+  if(th==='dark'){
     ico.textContent='☀️';
-    lbl.textContent='Светлая тема';
+    lbl.textContent=t('toLight');
   }else{
-    /* Сейчас светлая тема — кнопка предложит переключиться на тёмную */
     ico.textContent='🌙';
-    lbl.textContent='Тёмная тема';
+    lbl.textContent=t('toDark');
   }
-  try{localStorage.setItem(THEME_KEY,t);}catch(_){}
+  try{localStorage.setItem(THEME_KEY,th);}catch(_){}
 }
-function currentTheme(){try{const s=localStorage.getItem(THEME_KEY);if(s==='dark'||s==='light')return s;}catch(_){}return 'dark';}
-applyTheme(currentTheme());
-document.getElementById('themeToggle').addEventListener('click',()=>{
-  applyTheme(document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark');
-});
+function currentTheme(){
+  try{const s=localStorage.getItem(THEME_KEY);if(s==='dark'||s==='light')return s;}catch(_){}
+  return 'dark';
+}
 
+/* ============================================================
+   ИГРА
+   ============================================================ */
 const SIZE=4, N=16;
 const MODE_WALLS={
   classic:[],
@@ -193,7 +435,6 @@ const CFG={
   wallsF: {p1W:[5,3,2,1.5,1], p1T:120000, p1S:25000000, p2W:[5,3,2,1.5,1], p2T:240000, p2S:50000000},
   wallsG: {p1W:[5,3,2,1.5,1], p1T:120000, p1S:25000000, p2W:[5,3,2,1.5,1], p2T:240000, p2S:50000000}
 };
-const DEFAULT_HINT='Тяните плитку на пустую клетку — или кликните по ней.\nЕсли пустая на одной линии — потяните в её сторону: сдвинется вся группа.';
 const SVG_PLAY='<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5 L13.5 8 L4 13.5 Z"/></svg>';
 const SVG_STOP='<svg viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="3" width="10" height="10" rx="2"/></svg>';
 
@@ -204,6 +445,8 @@ const undoBtn=document.getElementById('undoBtn'),redoBtn=document.getElementById
 const scrambleBtn=document.getElementById('scrambleBtn'),resetBtn=document.getElementById('resetBtn');
 const solveBtn=document.getElementById('solveBtn'),winBtn=document.getElementById('winBtn');
 const modesEl=document.getElementById('modes'),hintText=document.getElementById('hintText');
+const hintBtn=document.getElementById('hintBtn');
+const mbOverlay=document.getElementById('mbOverlay'),mbBoard=document.getElementById('mbBoard');
 
 let cells=new Array(N).fill(0),empty=N-1,history=[],redoStack=[];
 let wallSet=new Set(),mode='classic',solved=false;
@@ -239,10 +482,10 @@ function groupStep(clicked){
 }
 
 let toastTimer=null;
-function showToast(msg){let t=document.querySelector('.toast');if(!t){t=document.createElement('div');t.className='toast';document.body.appendChild(t);}t.textContent=msg;void t.offsetWidth;t.classList.add('show');if(toastTimer)clearTimeout(toastTimer);toastTimer=setTimeout(()=>t.classList.remove('show'),2800);}
+function showToast(msg){let tt=document.querySelector('.toast');if(!tt){tt=document.createElement('div');tt.className='toast';document.body.appendChild(tt);}tt.textContent=msg;void tt.offsetWidth;tt.classList.add('show');if(toastTimer)clearTimeout(toastTimer);toastTimer=setTimeout(()=>tt.classList.remove('show'),2800);}
 function setHint(text,kind){hintText.textContent=text;hintText.classList.remove('is-error','is-success','is-search');if(kind==='error')hintText.classList.add('is-error');else if(kind==='success')hintText.classList.add('is-success');else if(kind==='search')hintText.classList.add('is-search');}
-function resetHint(){setHint(DEFAULT_HINT);}
-function fmtTime(ms){const t=Math.floor(ms/1000);return String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0');}
+function resetHint(){setHint(t('defaultHint'));}
+function fmtTime(ms){const tt=Math.floor(ms/1000);return String(Math.floor(tt/60)).padStart(2,'0')+':'+String(tt%60).padStart(2,'0');}
 function startTimer(){if(timerOn)return;timerOn=true;timerBase=performance.now()-elapsed;timerId=setInterval(()=>{elapsed=performance.now()-timerBase;timeEl.textContent=fmtTime(elapsed);},120);}
 function stopTimer(){timerOn=false;if(timerId!==null){clearInterval(timerId);timerId=null;}}
 function resetTimer(){stopTimer();elapsed=0;timeEl.textContent='00:00';}
@@ -521,6 +764,74 @@ function setMode(m){
   renderWalls();
 }
 
+/* ============================================================
+   МИНИ-ДОСКА (ПОДСКАЗКА) — по центру над игровой доской
+   ============================================================ */
+function renderMiniboard(){
+  mbBoard.innerHTML='';
+  const w = mbBoard.clientWidth;
+  if (!w) return;
+  const pad = w * 0.05;
+  const gap = w * 0.02;
+  const cell = (w - pad*2 - gap*3) / 4;
+  const step = cell + gap;
+  const wall = Math.max(3, w * 0.015);
+
+  /* Клетки */
+  for (let r = 0; r < 4; r++){
+    for (let c = 0; c < 4; c++){
+      const idx = r*4 + c;
+      const v = idx === 15 ? 0 : (idx + 1);
+      const el = document.createElement('div');
+      el.className = 'mb-cell';
+      if (v === 0) el.classList.add('mb-empty');
+      else el.textContent = String(v);
+      el.style.left = (pad + c*step) + 'px';
+      el.style.top = (pad + r*step) + 'px';
+      el.style.width = cell + 'px';
+      el.style.height = cell + 'px';
+      el.style.fontSize = (cell * 0.55) + 'px';
+      el.style.borderRadius = Math.max(6, cell * 0.2) + 'px';
+      mbBoard.appendChild(el);
+    }
+  }
+
+  /* Перегородки для текущего режима */
+  wallSet.forEach(key=>{
+    const [a,b] = key.split(':').map(Number);
+    const ra = rowOf(a), ca = colOf(a), rb = rowOf(b), cb = colOf(b);
+    const el = document.createElement('div'); el.className = 'mb-wall';
+    if (ra === rb){
+      const x = pad + Math.max(ca, cb) * step - gap / 2;
+      el.style.left   = (x - wall/2) + 'px';
+      el.style.top    = (pad + ra*step - gap*0.28) + 'px';
+      el.style.width  = wall + 'px';
+      el.style.height = (cell + gap*0.56) + 'px';
+    } else {
+      const y = pad + Math.max(ra, rb) * step - gap / 2;
+      el.style.top    = (y - wall/2) + 'px';
+      el.style.left   = (pad + ca*step - gap*0.28) + 'px';
+      el.style.height = wall + 'px';
+      el.style.width  = (cell + gap*0.56) + 'px';
+    }
+    mbBoard.appendChild(el);
+  });
+}
+
+function showMiniboard(){
+  mbOverlay.classList.add('show');
+  requestAnimationFrame(renderMiniboard);
+}
+function hideMiniboard(){
+  mbOverlay.classList.remove('show');
+}
+function isMiniboardShown(){
+  return mbOverlay.classList.contains('show');
+}
+
+/* ============================================================
+   РЕШАТЕЛЬ
+   ============================================================ */
 function solveClassicIDA(maxTimeMs,onProgress){
   return new Promise(resolve=>{
     const dist=new Array(N);
@@ -1035,8 +1346,8 @@ async function solveWalledPhased(onProgress){
 }
 
 function restore(c,e){for(let i=0;i<N;i++)cells[i]=c[i];empty=e;}
-function setSolveButtonIdle(){solveBtn.innerHTML='<span class="ico">'+SVG_PLAY+'</span>Решить';solveBtn.classList.add('solve');solveBtn.classList.remove('stop');solveBtn.dataset.state='idle';}
-function setSolveButtonStop(){solveBtn.innerHTML='<span class="ico">'+SVG_STOP+'</span>Стоп';solveBtn.classList.add('stop');solveBtn.classList.remove('solve');solveBtn.dataset.state='stop';}
+function setSolveButtonIdle(){solveBtn.innerHTML='<span class="ico">'+SVG_PLAY+'</span><span data-i18n="solve">'+t('solve')+'</span>';solveBtn.classList.add('solve');solveBtn.classList.remove('stop');solveBtn.dataset.state='idle';}
+function setSolveButtonStop(){solveBtn.innerHTML='<span class="ico">'+SVG_STOP+'</span><span data-i18n="stop">'+t('stop')+'</span>';solveBtn.classList.add('stop');solveBtn.classList.remove('solve');solveBtn.dataset.state='stop';}
 
 function animateSolution(solution){
   const clean=[];
@@ -1052,7 +1363,7 @@ function animateSolution(solution){
     const from=solution[i++];
     if(!canMoveTo(from,empty)){
       animating=false;animationTimer=null;setSolveButtonIdle();updateButtons();
-      setHint('Решение прервано на ходу '+i+' из '+solution.length+'.','error');
+      setHint(t('hNotFound',{why:t('whyUnknown')}),'error');
       return;
     }
     const to=empty;
@@ -1068,55 +1379,55 @@ function animateSolution(solution){
 
 function startSolving(){
   if(solved||animating||busy)return;
-  if(isSolvedLayout()){showToast('Доска уже собрана — нажмите «Перемешать»');return;}
+  if(isSolvedLayout()){showToast(t('alertScrambled'));return;}
   busy=true;searchAborted=false;
   setSolveButtonStop();updateButtons();
 
   if(mode==='classic'){
-    setHint('Решаю (IDA*)…','search');
+    setHint(t('hClassicSearch'),'search');
     solveClassicIDA(300000,(nodes,sec)=>{
       if(searchAborted)return;
-      setHint('Решаю (IDA*)…\n'+nodes.toLocaleString('ru-RU')+' узлов · '+sec.toFixed(1)+' с','search');
+      setHint(t('hClassicProg',{n:nodes.toLocaleString(),t:sec.toFixed(1)}),'search');
     }).then(res=>{
       if(searchAborted){busy=false;setSolveButtonIdle();updateButtons();resetHint();return;}
       busy=false;
-      const dt=res.elapsedSec.toFixed(1),expanded=res.expanded.toLocaleString('ru-RU');
+      const dt=res.elapsedSec.toFixed(1),expanded=res.expanded.toLocaleString();
       if(!res.solution){
         setSolveButtonIdle();updateButtons();
-        const why=res.reason==='timeout'?'истекло время':res.reason==='exhausted'?'решения нет':'причина неизвестна';
-        setHint('Решение не найдено — '+why+'.\nУзлов: '+expanded+', время: '+dt+' с.','error');
+        const why=res.reason==='timeout'?t('whyTimeout'):res.reason==='exhausted'?t('whyNoSol'):t('whyUnknown');
+        setHint(t('hClassicNoSol',{why,n:expanded,t:dt}),'error');
         return;
       }
       if(!res.solution.length){setSolveButtonIdle();updateButtons();resetHint();return;}
-      setHint('Решение найдено ('+res.solution.length+' ходов, '+dt+' с). Показ…','success');
+      setHint(t('hFound',{n:res.solution.length,info:''}),'success');
       animateSolution(res.solution);
     });
     return;
   }
 
-  setHint('Анализ доски…','search');
+  setHint(t('hAnalyze'),'search');
   setTimeout(()=>{
     if(searchAborted){busy=false;setSolveButtonIdle();updateButtons();resetHint();return;}
     solveWalledPhased(info=>{
       if(searchAborted)return;
-      const memTxt=(info.mem!==null&&info.mem!==undefined)?' · '+info.mem+' МБ':'';
+      const memTxt=(info.mem!==null&&info.mem!==undefined)?t('hMemSuffix',{n:info.mem}):'';
       if(info.phase===0){
         const p1Txt=info.p1Cells.map(c=>c+1).join(', ');
-        const trapsTxt=info.traps.length?' · тупиков: '+info.traps.length:'';
-        setHint('Анализ доски:\nфаза 1 — клетки '+p1Txt+trapsTxt,'search');
+        const trapsTxt=info.traps.length?t('hTraps',{n:info.traps.length}):'';
+        setHint(t('hAnalyzeCells',{cells:p1Txt,traps:trapsTxt}),'search');
       }else if(info.phase==='bead1'){
-        setHint('Фаза 1 (бусинки): попытка '+(info.attempt||1)+' из '+(info.total||'?')+'…','search');
+        setHint(t('hBeads',{a:info.attempt||1,b:info.total||'?'}),'search');
       }else if(info.phase===1){
         if(info.iter!==undefined){
-          setHint('Фаза 1 (A*), W='+(info.W||'')+':\n'+info.iter.toLocaleString('ru-RU')+' состояний · '+info.sec.toFixed(1)+' с'+memTxt,'search');
-        }else setHint('Фаза 1 (A*), W='+(info.W||'')+'…','search');
+          setHint(t('hPhase1AProg',{w:info.W||'',s:info.iter.toLocaleString(),t:info.sec.toFixed(1),mem:memTxt}),'search');
+        }else setHint(t('hPhase1A',{w:info.W||''}),'search');
       }else if(info.phase==='macros'){
-        setHint('Найдено циклов: '+info.cycles+'\nмакро-ходов: '+info.count,'search');
+        setHint(t('hMacros',{c:info.cycles,m:info.count}),'search');
       }else if(info.phase===2){
-        const macTxt=info.macroCount?' · макро: '+info.macroCount:'';
+        const macTxt=info.macroCount?t('hMacSuffix',{n:info.macroCount}):'';
         if(info.iter!==undefined){
-          setHint('Фаза 2, W='+(info.W||'')+macTxt+':\n'+info.iter.toLocaleString('ru-RU')+' состояний · '+info.sec.toFixed(1)+' с'+memTxt,'search');
-        }else setHint('Фаза 2, W='+(info.W||'')+macTxt+'…','search');
+          setHint(t('hPhase2Prog',{w:info.W||'',mac:macTxt,s:info.iter.toLocaleString(),t:info.sec.toFixed(1),mem:memTxt}),'search');
+        }else setHint(t('hPhase2',{w:info.W||'',mac:macTxt}),'search');
       }
     }).then(res=>{
       if(searchAborted){busy=false;setSolveButtonIdle();updateButtons();resetHint();return;}
@@ -1124,29 +1435,29 @@ function startSolving(){
       if(!res.solution){
         setSolveButtonIdle();updateButtons();
         let why='';
-        if(res.reason==='timeout')why='истекло время';
-        else if(res.reason==='aborted')why='остановлено';
-        else if(res.reason==='exhausted')why='пространство исчерпано';
-        else if(res.reason==='all_failed')why='все попытки исчерпаны';
-        else if(res.reason==='alloc_failed')why='не хватило памяти';
-        else if(res.reason==='phase1_failed')why='фаза 1 не удалась';
-        else if(res.reason==='phase1_apply_failed')why='фаза 1: не удалось применить';
-        else if(res.reason==='phase1_verify_failed')why='фаза 1: проверка не прошла';
-        else if(res.reason==='disconnected')why='граф клеток разорван';
-        else if(res.reason&&res.reason.startsWith('phase1_'))why='фаза 1 не удалась ('+res.reason.slice(7)+')';
-        else if(res.reason&&res.reason.startsWith('phase2_'))why='фаза 2 не удалась ('+res.reason.slice(7)+')';
-        else why=res.reason||'причина неизвестна';
-        setHint('Решение не найдено — '+why+'.','error');
+        if(res.reason==='timeout')why=t('whyTimeout');
+        else if(res.reason==='aborted')why=t('whyAborted');
+        else if(res.reason==='exhausted')why=t('whyExhausted');
+        else if(res.reason==='all_failed')why=t('whyAllFailed');
+        else if(res.reason==='alloc_failed')why=t('whyAllocFailed');
+        else if(res.reason==='phase1_failed')why=t('whyP1Failed');
+        else if(res.reason==='phase1_apply_failed')why=t('whyP1Apply');
+        else if(res.reason==='phase1_verify_failed')why=t('whyP1Verify');
+        else if(res.reason==='disconnected')why=t('whyDisconnected');
+        else if(res.reason&&res.reason.startsWith('phase1_'))why=t('whyP1Prefix',{r:res.reason.slice(7)});
+        else if(res.reason&&res.reason.startsWith('phase2_'))why=t('whyP2Prefix',{r:res.reason.slice(7)});
+        else why=res.reason||t('whyUnknown');
+        setHint(t('hNotFound',{why}),'error');
         return;
       }
       if(!res.solution.length){setSolveButtonIdle();updateButtons();resetHint();return;}
-      const phaseInfo=' (фаза 1: '+res.phase1Len+', '+res.method+', фаза 2: '+res.phase2Len+', макро: '+res.macros+')';
-      setHint('Решение найдено ('+res.solution.length+' ходов'+phaseInfo+'). Показ…','success');
+      const phaseInfo=t('hPhaseInfo',{p1:res.phase1Len,method:res.method,p2:res.phase2Len,macros:res.macros});
+      setHint(t('hFound',{n:res.solution.length,info:phaseInfo}),'success');
       animateSolution(res.solution);
     }).catch(err=>{
       console.error(err);
       busy=false;setSolveButtonIdle();updateButtons();
-      setHint('Ошибка решателя: '+err,'error');
+      setHint('Solver error: '+err,'error');
     });
   },50);
 }
@@ -1156,36 +1467,71 @@ function stopSolving(){
   if(animationTimer!==null){clearTimeout(animationTimer);animationTimer=null;}
   animating=false;busy=false;
   setSolveButtonIdle();updateButtons();resetHint();
-  showToast('Остановлено');
+  showToast(t('alertStopped'));
 }
 function onSolveButtonClick(){
   if(solveBtn.dataset.state==='stop')stopSolving();
   else startSolving();
 }
 
+/* ============================================================
+   ИНИЦИАЛИЗАЦИЯ
+   ============================================================ */
 function init(){
   createTiles();setMode('classic');measure();newGame(false);
+
+  applyLang(initialLang());
+  applyTheme(currentTheme());
+
   if(window.ResizeObserver){const ro=new ResizeObserver(measure);ro.observe(boardEl);}
   else window.addEventListener('resize',measure);
+
   boardEl.addEventListener('pointerdown',onPointerDown);
   boardEl.addEventListener('pointermove',onPointerMove);
   boardEl.addEventListener('pointerup',onPointerUp);
   boardEl.addEventListener('pointercancel',onPointerUp);
   boardEl.addEventListener('contextmenu',e=>e.preventDefault());
+
   undoBtn.addEventListener('click',undo);
   redoBtn.addEventListener('click',redo);
   scrambleBtn.addEventListener('click',()=>{if(!busy&&!animating)newGame(true);});
   resetBtn.addEventListener('click',resetToSolved);
   solveBtn.addEventListener('click',onSolveButtonClick);
   winBtn.addEventListener('click',()=>newGame(true));
+
+  /* Подсказка: показ кнопкой, закрытие любым кликом/тапом. */
+  hintBtn.addEventListener('click', function(e){
+    e.stopPropagation();
+    if (isMiniboardShown()) { hideMiniboard(); return; }
+    showMiniboard();
+  });
+  /* Любой клик вне кнопки — закрывает миникарту. Слушаем на фазе capture,
+     чтобы поймать клик до того, как до него доберутся обработчики доски. */
+  document.addEventListener('pointerdown', function(e){
+    if (!isMiniboardShown()) return;
+    if (e.target === hintBtn || hintBtn.contains(e.target)) return;
+    hideMiniboard();
+  }, true);
+
   modesEl.addEventListener('click',e=>{
     const btn=e.target.closest('.mode-btn');
     if(!btn||btn.disabled)return;
     if(btn.dataset.mode===mode)return;
     setMode(btn.dataset.mode);resetToSolved();
   });
+
+  document.getElementById('themeToggle').addEventListener('click',()=>{
+    applyTheme(document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark');
+  });
+  document.getElementById('langToggle').addEventListener('click',()=>{
+    applyLang(lang === 'ru' ? 'en' : 'ru');
+  });
+
   document.addEventListener('keydown',e=>{
-    if(e.key==='Escape'&&solveBtn.dataset.state==='stop'){e.preventDefault();stopSolving();return;}
+    if(e.key==='Escape'){
+      if (isMiniboardShown()){ hideMiniboard(); return; }
+      if (solveBtn.dataset.state==='stop'){ e.preventDefault(); stopSolving(); return; }
+    }
     if(busy||animating)return;
     if(e.key==='z'&&(e.ctrlKey||e.metaKey)&&!e.shiftKey){e.preventDefault();undo();}
     else if((e.key==='y'&&(e.ctrlKey||e.metaKey))||(e.key==='z'&&(e.ctrlKey||e.metaKey)&&e.shiftKey)){e.preventDefault();redo();}
@@ -1193,7 +1539,10 @@ function init(){
     else if(e.key==='n'||e.key==='N'){newGame(true);}
     else if(e.key==='s'||e.key==='S'){e.preventDefault();startSolving();}
   });
+
+  window.addEventListener('resize',()=>{ if (isMiniboardShown()) renderMiniboard(); });
 }
+
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
 else init();
 })();
