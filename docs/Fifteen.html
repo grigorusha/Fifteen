@@ -218,8 +218,8 @@
 </div>
 
 <script>
-(function(){
 'use strict';
+const APP_VERSION='2.02';
 
 /* ============================================================
    ЯЗЫК
@@ -241,7 +241,12 @@ const I18N = {
     miniboardTitle: 'Собранная доска',
     creditsAuthor: 'Автор головоломки и вдохновитель проекта: Николай Авилов —',
     creditsDevs: 'Разработчики: Deepseek + Grigorusha —',
+    hWholeInfo: ', поиск по всей доске',
     hAnalyze: 'Анализ доски…',
+    hPatterns: 'Подготовка таблиц расстояний: {a}/{b}\nОбработано: {n}',
+    hGlobal: 'Поиск по всей доске, W={w}\nСостояний: {n} · {t} с',
+    whyStateLimit: 'достигнут лимит памяти поиска; отсутствие решения не доказано',
+    whyVerification: 'найденный путь не прошёл проверку',
     hAnalyzeCells: 'Анализ доски:\nфаза 1 — клетки {cells}{traps}',
     hTraps: ' · тупиков: {n}',
     hBeads: 'Фаза 1 (бусинки): попытка {a} из {b}…',
@@ -284,7 +289,12 @@ const I18N = {
     miniboardTitle: 'Solved board',
     creditsAuthor: 'Puzzle author and project inspiration: Nikolay Avilov —',
     creditsDevs: 'Developers: Deepseek + Grigorusha —',
+    hWholeInfo: ', whole-board search',
     hAnalyze: 'Analyzing board…',
+    hPatterns: 'Building pattern databases: {a}/{b}\nProcessed: {n}',
+    hGlobal: 'Searching the whole board, W={w}\nStates: {n} · {t} s',
+    whyStateLimit: 'search memory limit reached; unsolvability is not proven',
+    whyVerification: 'solution verification failed',
     hAnalyzeCells: 'Analyzing board:\nphase 1 — cells {cells}{traps}',
     hTraps: ' · dead ends: {n}',
     hBeads: 'Phase 1 (beads): attempt {a} of {b}…',
@@ -424,16 +434,6 @@ const PHASE1={
   wallsE:{cells:[0,1,2,3,4,7],tiles:[1,2,3,4,5,8]},
   wallsF:{cells:[0,1,2,3],tiles:[1,2,3,4]},
   wallsG:{cells:[0,1,2,3],tiles:[1,2,3,4]}
-};
-const CFG={
-  classic:{p1W:[5,3,2,1.5,1], p1T:120000, p1S:25000000, p2W:[5,3,2,1.5,1], p2T:240000, p2S:50000000},
-  wallsA: {p1W:[5,3,2,1.5,1], p1T:120000, p1S:25000000, p2W:[5,3,2,1.5,1], p2T:240000, p2S:50000000},
-  wallsB: {p1W:[5,3,2,1.5,1], p1T:150000, p1S:30000000, p2W:[5,3,2,1.5,1], p2T:300000, p2S:60000000},
-  wallsC: {p1W:[5,3,2,1.5,1], p1T:150000, p1S:30000000, p2W:[5,3,2,1.5,1], p2T:300000, p2S:60000000},
-  wallsD: {p1W:[5,3,2,1.5,1], p1T:60000,  p1S:10000000, p2W:[5,3,2,1.5,1], p2T:300000, p2S:60000000},
-  wallsE: {p1W:[5,3,2,1.5,1], p1T:150000, p1S:30000000, p2W:[5,3,2,1.5,1], p2T:300000, p2S:60000000},
-  wallsF: {p1W:[5,3,2,1.5,1], p1T:120000, p1S:25000000, p2W:[5,3,2,1.5,1], p2T:240000, p2S:50000000},
-  wallsG: {p1W:[5,3,2,1.5,1], p1T:120000, p1S:25000000, p2W:[5,3,2,1.5,1], p2T:240000, p2S:50000000}
 };
 const SVG_PLAY='<svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5 L13.5 8 L4 13.5 Z"/></svg>';
 const SVG_STOP='<svg viewBox="0 0 16 16" fill="currentColor"><rect x="3" y="3" width="10" height="10" rx="2"/></svg>';
@@ -575,7 +575,7 @@ function shuffleBoard(){
   }
 }
 function isSolvedLayout(){for(let i=0;i<N-1;i++)if(cells[i]!==i+1)return false;return cells[N-1]===0;}
-function stopEverything(){searchAborted=true;if(animationTimer!==null){clearTimeout(animationTimer);animationTimer=null;}animating=false;busy=false;}
+function stopEverything(){solverGeneration++;searchAborted=true;if(animationTimer!==null){clearTimeout(animationTimer);animationTimer=null;}animating=false;busy=false;}
 function newGame(doShuffle){
   stopEverything();hideWin();solved=false;resetSolvedBoard();
   if(doShuffle){let g=0;do{shuffleBoard();g++;}while(isSolvedLayout()&&g<20);}
@@ -958,181 +958,6 @@ function solvePhase1Beads(startState,startEmpty,targetCells,targetTiles,order){
   return {moves,state:state.slice(),empty:emp};
 }
 
-function astarWalled(startCells,startEmpty,isGoal,hFn,lockedCells,maxTimeMs,maxStates,W,macros,onProgress){
-  return new Promise(resolve=>{
-    if(isGoal(startCells))return resolve({solution:[],reason:'solved',elapsedSec:0,expanded:0,stored:0});
-    const isLocked=new Uint8Array(N);
-    for(const c of lockedCells)isLocked[c]=1;
-    const byAnchor=new Array(N);
-    for(let i=0;i<N;i++)byAnchor[i]=[];
-    if(macros)for(let i=0;i<macros.length;i++)byAnchor[macros[i].anchor].push(i);
-
-    const dist=new Array(N);
-    for(let i=0;i<N;i++){
-      const d=new Array(N).fill(-1);d[i]=0;
-      const q=[i];let head=0;
-      while(head<q.length){
-        const cur=q[head++];const r=rowOf(cur),c=colOf(cur);
-        const nbs=[];
-        if(r>0)nbs.push(cur-4);if(r<3)nbs.push(cur+4);
-        if(c>0)nbs.push(cur-1);if(c<3)nbs.push(cur+1);
-        for(const nb of nbs){if(d[nb]!==-1)continue;if(!isOpen(cur,nb))continue;d[nb]=d[cur]+1;q.push(nb);}
-      }
-      dist[i]=d;
-    }
-    for(let i=0;i<N;i++)for(let j=0;j<N;j++)if(dist[i][j]===-1)
-      return resolve({solution:null,reason:'disconnected',elapsedSec:0,expanded:0,stored:0});
-
-    const startH=hFn(startCells,dist);
-    if(startH===0)return resolve({solution:[],reason:'solved',elapsedSec:0,expanded:0,stored:0});
-
-    let tableBits=1;
-    while((1<<tableBits)<maxStates*2)tableBits++;
-    const tableSize=1<<tableBits,tableMask=tableSize-1;
-
-    let table,stateHi,stateLo,empList,gArr,hArr,fArr,parentArr,moveArr,macroIdxArr,heap;
-    try{
-      table=new Uint32Array(tableSize);
-      stateHi=new Uint32Array(maxStates);stateLo=new Uint32Array(maxStates);
-      empList=new Uint8Array(maxStates);
-      gArr=new Uint16Array(maxStates);hArr=new Uint16Array(maxStates);fArr=new Uint16Array(maxStates);
-      parentArr=new Int32Array(maxStates);moveArr=new Uint8Array(maxStates);
-      macroIdxArr=new Int32Array(maxStates);
-      heap=new Uint32Array(maxStates+4);
-    }catch(e){return resolve({solution:null,reason:'alloc_failed',elapsedSec:0,expanded:0,stored:0});}
-
-    function packHi(s){let h=0;for(let i=0;i<8;i++)h=((h<<4)|s[i])>>>0;return h;}
-    function packLo(s){let l=0;for(let i=8;i<N;i++)l=((l<<4)|s[i])>>>0;return l;}
-    function hashKey(hi,lo){let h=hi>>>0;h=Math.imul(h^(h>>>16),0x85ebca6b)>>>0;h=Math.imul(h^(h>>>13),0xc2b2ae35)>>>0;h=(h^(h>>>16))>>>0;h=(h^lo)>>>0;h=Math.imul(h^(h>>>15),0x27d4eb2f)>>>0;h=(h^(h>>>15))>>>0;return h&tableMask;}
-    let size=0;
-    function insert(hi,lo,idx){let s=hashKey(hi,lo);while(table[s]!==0)s=(s+1)&tableMask;table[s]=idx+1;}
-    function has(hi,lo){let s=hashKey(hi,lo);while(table[s]!==0){const i=table[s]-1;if(stateHi[i]===hi&&stateLo[i]===lo)return true;s=(s+1)&tableMask;}return false;}
-    let heapSize=0;
-    function heapPush(i){heap[heapSize]=i;let k=heapSize++;const fk=fArr[i];while(k>0){const p=(k-1)>>1;if(fk<fArr[heap[p]]){heap[k]=heap[p];k=p;}else break;}heap[k]=i;}
-    function heapPop(){
-      const top=heap[0];heapSize--;
-      if(heapSize===0)return top;
-      const last=heap[heapSize],lastF=fArr[last];let k=0;
-      while(true){const l=2*k+1;if(l>=heapSize)break;const r=l+1;let m=l;if(r<heapSize&&fArr[heap[r]]<fArr[heap[l]])m=r;if(fArr[heap[m]]>=lastF)break;heap[k]=heap[m];k=m;}
-      heap[k]=last;return top;
-    }
-
-    const sHi=packHi(startCells),sLo=packLo(startCells);
-    stateHi[0]=sHi;stateLo[0]=sLo;empList[0]=startEmpty;
-    gArr[0]=0;hArr[0]=startH;fArr[0]=Math.min(65535,W*startH);
-    parentArr[0]=-1;moveArr[0]=0;macroIdxArr[0]=-1;
-    size=1;heap[0]=0;heapSize=1;
-    insert(sHi,sLo,0);
-
-    const scratch=new Uint8Array(N),scratch2=new Uint8Array(N);
-    const startTime=performance.now();let iter=0;const CHUNK=4000;
-
-    function finish(solution,reason){resolve({solution,reason,elapsedSec:(performance.now()-startTime)/1000,expanded:iter,stored:size});}
-
-    function processChunk(){
-      if(searchAborted)return finish(null,'aborted');
-      if(performance.now()-startTime>maxTimeMs)return finish(null,'timeout');
-      if(iter>=maxStates)return finish(null,'state_limit');
-      const chunkEnd=Math.min(iter+CHUNK,maxStates);
-      let overflow=false;
-
-      while(iter<chunkEnd){
-        if(heapSize===0)return finish(null,'exhausted');
-        iter++;
-        const idx=heapPop();
-        const curHi=stateHi[idx],curLo=stateLo[idx];
-        const curH=hArr[idx],curEmp=empList[idx],curG=gArr[idx];
-
-        let t=curHi>>>0;
-        for(let i=7;i>=0;i--){scratch[i]=t&0xF;t=t>>>4;}
-        t=curLo>>>0;
-        for(let i=15;i>=8;i--){scratch[i]=t&0xF;t=t>>>4;}
-
-        if(isGoal(scratch)){
-          const rev=[];let p=idx;
-          while(parentArr[p]!==-1){
-            const mi=macroIdxArr[p];
-            if(mi>=0)rev.push({macro:macros[mi]});
-            else rev.push({single:moveArr[p]});
-            p=parentArr[p];
-          }
-          rev.reverse();
-          const solution=[];
-          for(const item of rev){
-            if(item.single!==undefined)solution.push(item.single);
-            else for(const m of item.macro.moves)solution.push(m);
-          }
-          return finish(solution,'found');
-        }
-
-        const r=curEmp>>2,c=curEmp&3,newG=curG+1;
-
-        for(let d=0;d<4;d++){
-          let nr=r,nc=c;
-          if(d===0)nr--;else if(d===1)nr++;else if(d===2)nc--;else nc++;
-          if(nr<0||nr>=SIZE||nc<0||nc>=SIZE)continue;
-          const n=nr*SIZE+nc;
-          if(isLocked[n]||!isOpen(curEmp,n))continue;
-          const v=scratch[n];
-          scratch[curEmp]=v;scratch[n]=0;
-          const cHi=packHi(scratch),cLo=packLo(scratch);
-          scratch[n]=v;scratch[curEmp]=0;
-          if(has(cHi,cLo))continue;
-          if(size>=maxStates){overflow=true;break;}
-          const delta=dist[curEmp][v-1]-dist[n][v-1];
-          const childH=curH+delta;
-          if(childH<0)continue;
-          if(childH>65535)continue;
-          const ci=size++;
-          stateHi[ci]=cHi;stateLo[ci]=cLo;
-          empList[ci]=n;gArr[ci]=Math.min(65535,newG);hArr[ci]=childH;
-          fArr[ci]=Math.min(65535,newG+W*childH);
-          parentArr[ci]=idx;moveArr[ci]=n;macroIdxArr[ci]=-1;
-          insert(cHi,cLo,ci);
-          heapPush(ci);
-        }
-        if(overflow)break;
-
-        const applicable=byAnchor[curEmp];
-        for(let ai=0;ai<applicable.length;ai++){
-          const mi=applicable[ai];
-          const macro=macros[mi];
-          for(let k=0;k<N;k++)scratch2[k]=scratch[k];
-          let emp2=curEmp,okPath=true;
-          for(const mv of macro.moves){
-            if(!isOpen(emp2,mv)){okPath=false;break;}
-            if(isLocked[mv]){okPath=false;break;}
-            const v=scratch2[mv];
-            scratch2[emp2]=v;scratch2[mv]=0;
-            emp2=mv;
-          }
-          if(!okPath||emp2!==curEmp)continue;
-          const cHi=packHi(scratch2),cLo=packLo(scratch2);
-          if(has(cHi,cLo))continue;
-          if(size>=maxStates){overflow=true;break;}
-          const childH=hFn(scratch2,dist);
-          if(childH>65535)continue;
-          const childG=curG+macro.moves.length;
-          if(childG>65535)continue;
-          const ci=size++;
-          stateHi[ci]=cHi;stateLo[ci]=cLo;
-          empList[ci]=curEmp;
-          gArr[ci]=Math.min(65535,childG);hArr[ci]=childH;
-          fArr[ci]=Math.min(65535,childG+W*childH);
-          parentArr[ci]=idx;moveArr[ci]=0;macroIdxArr[ci]=mi;
-          insert(cHi,cLo,ci);
-          heapPush(ci);
-        }
-        if(overflow)break;
-      }
-      if(overflow)return finish(null,'state_limit');
-      if(onProgress)onProgress(iter,(performance.now()-startTime)/1000,W,size,getMemMB());
-      setTimeout(processChunk,0);
-    }
-    setTimeout(processChunk,0);
-  });
-}
-
 function computeTraps(lockedCells){
   const removed=new Set(lockedCells),traps=[];
   let changed=true;
@@ -1152,197 +977,239 @@ function computeTraps(lockedCells){
   return traps;
 }
 
-function findShortCycles(maxLen,lockedSet){
-  const cycles=[],seen=new Set();
-  function neighborsFree(i){
-    const r=i>>2,c=i&3;const out=[];
-    if(r>0){const n=i-4;if(!lockedSet.has(n)&&isOpen(i,n))out.push(n);}
-    if(r<3){const n=i+4;if(!lockedSet.has(n)&&isOpen(i,n))out.push(n);}
-    if(c>0){const n=i-1;if(!lockedSet.has(n)&&isOpen(i,n))out.push(n);}
-    if(c<3){const n=i+1;if(!lockedSet.has(n)&&isOpen(i,n))out.push(n);}
-    return out;
+/* Fifteen 2.01: all search state is local; no tile is permanently locked. */
+let solverGeneration=0;
+const patternCache=new Map();
+const solverYield=()=>new Promise(resolve=>setTimeout(resolve,0));
+function solverCancelled(context){return context ? context.id!==solverGeneration : searchAborted;}
+function solverGraph(lockedCells){
+  const locked=new Set(lockedCells||[]);
+  const adj=Array.from({length:N},()=>[]);
+  for(let i=0;i<N;i++){
+    if(locked.has(i))continue;
+    for(const n of [i-4,i+4,i-1,i+1])
+      if(n>=0&&n<N&&!locked.has(n)&&Math.abs(rowOf(i)-rowOf(n))+Math.abs(colOf(i)-colOf(n))===1&&isOpen(i,n))adj[i].push(n);
   }
-  function canonical(path){
-    const n=path.length;
-    const rev=[path[0]].concat(path.slice(1).reverse());
-    let best=null;
-    for(const p of [path,rev])for(let r=0;r<n;r++){
-      const key=p.slice(r).concat(p.slice(0,r)).join(',');
-      if(best===null||key<best)best=key;
-    }
-    return best;
+  const dist=Array.from({length:N},()=>new Array(N).fill(Infinity));
+  for(let i=0;i<N;i++){
+    dist[i][i]=0;if(locked.has(i))continue;
+    const q=[i];for(let h=0;h<q.length;h++)for(const n of adj[q[h]])
+      if(dist[i][n]===Infinity){dist[i][n]=dist[i][q[h]]+1;q.push(n);}
   }
-  for(let start=0;start<N;start++){
-    if(lockedSet.has(start))continue;
-    const path=[start],inPath=new Set([start]);
-    function dfs(cur){
-      for(const nb of neighborsFree(cur)){
-        if(nb===start){
-          if(path.length>=4&&path.length<=maxLen){
-            const key=canonical(path);
-            if(!seen.has(key)){seen.add(key);cycles.push(path.slice());}
-          }
-        }else if(!inPath.has(nb)&&path.length<maxLen){
-          inPath.add(nb);path.push(nb);dfs(nb);path.pop();inPath.delete(nb);
-        }
-      }
-    }
-    dfs(start);
-  }
-  return cycles;
+  return {adj,dist};
 }
 
-async function solveWalledPhased(onProgress){
-  const origCells=cells.slice(),origEmpty=empty;
-  const p1=PHASE1[mode]||PHASE1.classic;
-  const cfg=CFG[mode]||CFG.classic;
-  const traps=computeTraps(p1.cells);
-  const trapGoal=new Uint8Array(N).fill(255);
-  for(const t of traps)trapGoal[t]=(t===N-1)?0:(t+1);
-  if(onProgress)onProgress({phase:0,p1Cells:p1.cells.slice(),traps:traps.slice()});
-
-  const p1AllCells=p1.cells.concat(traps);
-  const p1AllTiles=p1.tiles.concat(traps.map(t=>(t===N-1)?0:(t+1)));
-
-  let sol1=null,method='beads';
-  const L=p1AllCells.length;
-  const orders=[];
-  orders.push(Array.from({length:L},(_,i)=>i));
-  if(L>1)orders.push(Array.from({length:L},(_,i)=>L-1-i));
-  if(L>=5){
-    const trapStart=p1.cells.length;
-    const ordTF=[],ordTL=[];
-    for(let i=trapStart;i<L;i++)ordTF.push(i);
-    for(let i=0;i<trapStart;i++)ordTF.push(i);
-    for(let i=0;i<trapStart;i++)ordTL.push(i);
-    for(let i=trapStart;i<L;i++)ordTL.push(i);
-    orders.push(ordTF);orders.push(ordTL);
+/* Weighted A*: best g, decrease-key and reopening; arrays grow on demand.
+   The supplied hFn is recomputed for every child, including partial goals. */
+async function astarWalled(startCells,startEmpty,isGoal,hFn,lockedCells,maxTimeMs,maxStates,W,macros,onProgress,context){
+  const began=performance.now(),graph=solverGraph(lockedCells);
+  const dist=graph.dist,adj=graph.adj;
+  let expanded=0,size=0,reopened=0,improved=0;
+  const result=(solution,reason)=>({solution,reason,elapsedSec:(performance.now()-began)/1000,expanded,stored:size,reopened,improved});
+  if(solverCancelled(context))return result(null,'aborted');
+  if(isGoal(startCells))return result([],'solved');
+  const startH=hFn(startCells,dist);
+  if(!Number.isFinite(startH))return result(null,'disconnected');
+  maxStates=Math.max(2,Math.min(maxStates,1200000));
+  let capacity=Math.min(maxStates,32768);
+  let hi=new Uint32Array(capacity),lo=new Uint32Array(capacity),emp=new Uint8Array(capacity),
+    cost=new Uint32Array(capacity),score=new Float32Array(capacity),parent=new Int32Array(capacity),
+    move=new Uint8Array(capacity),position=new Int32Array(capacity).fill(-1),heap=new Uint32Array(capacity);
+  let table=new Int32Array(65536),mask=table.length-1,heapSize=0;
+  function hash(a,b){let h=Math.imul(a^(a>>>16),0x85ebca6b);h=Math.imul(h^b,0xc2b2ae35);return (h^(h>>>16))>>>0;}
+  function slot(a,b){let s=hash(a,b)&mask;while(table[s]){const i=table[s]-1;if(hi[i]===a&&lo[i]===b)return s;s=(s+1)&mask;}return s;}
+  function growTable(){table=new Int32Array(table.length*2);mask=table.length-1;for(let i=0;i<size;i++)table[slot(hi[i],lo[i])]=i+1;}
+  function grow(){
+    const next=Math.min(maxStates,capacity*2);
+    function copy(a,fill){const b=new a.constructor(next);if(fill!==undefined)b.fill(fill);b.set(a);return b;}
+    hi=copy(hi);lo=copy(lo);emp=copy(emp);cost=copy(cost);score=copy(score);parent=copy(parent);move=copy(move);position=copy(position,-1);heap=copy(heap);capacity=next;
   }
-  if(L===6){orders.push([2,1,0,5,4,3]);orders.push([0,2,1,3,4,5]);}
+  function less(a,b){return score[a]<score[b]||(score[a]===score[b]&&cost[a]>cost[b]);}
+  function up(k){const i=heap[k];while(k>0){const p=(k-1)>>1;if(!less(i,heap[p]))break;heap[k]=heap[p];position[heap[k]]=k;k=p;}heap[k]=i;position[i]=k;}
+  function push(i){heap[heapSize]=i;position[i]=heapSize;up(heapSize++);}
+  function pop(){const first=heap[0];position[first]=-1;heapSize--;if(heapSize){const last=heap[heapSize];let k=0;while(k*2+1<heapSize){let c=k*2+1;if(c+1<heapSize&&less(heap[c+1],heap[c]))c++;if(!less(heap[c],last))break;heap[k]=heap[c];position[heap[k]]=k;k=c;}heap[k]=last;position[last]=k;}return first;}
+  function pack(st,offset){let x=0;for(let i=offset;i<offset+8;i++)x=(x<<4)|st[i];return x>>>0;}
+  function unpack(a,b,st){for(let i=7;i>=0;i--){st[i]=a&15;a>>>=4;}for(let i=15;i>=8;i--){st[i]=b&15;b>>>=4;}}
+  hi[0]=pack(startCells,0);lo[0]=pack(startCells,8);emp[0]=startEmpty;cost[0]=0;score[0]=W*startH;parent[0]=-1;
+  size=1;table[slot(hi[0],lo[0])]=1;push(0);
+  const st=new Uint8Array(N);let sliceStart=performance.now(),lastReport=0;
+  try{
+    while(heapSize){
+      if((expanded&127)===0){
+        if(solverCancelled(context))return result(null,'aborted');
+        const now=performance.now();if(now-began>=maxTimeMs)return result(null,'timeout');
+        if(now-sliceStart>=12){
+          if(onProgress&&now-lastReport>=120){onProgress(expanded,(now-began)/1000,W,size,getMemMB());lastReport=now;}
+          await solverYield();sliceStart=performance.now();
+          if(solverCancelled(context))return result(null,'aborted');
+        }
+      }
+      const idx=pop();expanded++;unpack(hi[idx],lo[idx],st);
+      if(isGoal(st)){
+        const path=[];let p=idx;
+        while(parent[p]!==-1){path.push(move[p]);p=parent[p];if(path.length>size)return result(null,'error');}
+        path.reverse();return result(path,'found');
+      }
+      const e=emp[idx],newG=cost[idx]+1;
+      for(const n of adj[e]){
+        const v=st[n];st[e]=v;st[n]=0;
+        const a=pack(st,0),b=pack(st,8);let s=slot(a,b),ci=table[s]-1;
+        if(ci>=0&&newG>=cost[ci]){st[n]=v;st[e]=0;continue;}
+        const h=hFn(st,dist);st[n]=v;st[e]=0;
+        if(!Number.isFinite(h))continue;
+        if(ci<0){
+          if(size>=maxStates)return result(null,'state_limit');
+          if(size>=capacity)grow();
+          if((size+1)*10>table.length*7){growTable();s=slot(a,b);}
+          ci=size++;hi[ci]=a;lo[ci]=b;emp[ci]=n;table[s]=ci+1;
+        }else{improved++;if(position[ci]<0)reopened++;}
+        cost[ci]=newG;score[ci]=newG+W*h;parent[ci]=idx;move[ci]=n;
+        if(position[ci]>=0)up(position[ci]);else push(ci);
+      }
+    }
+    return result(null,'exhausted');
+  }catch(error){console.error('[Solver]',error);return result(null,error instanceof RangeError?'alloc_failed':'error');}
+}
 
+/* Exact bidirectional search of the remainder. A failed bounded attempt
+   never declares the original board unsolvable. */
+async function solveRemainder(state,lockedCells,context,maxStates=20000){
+  const {adj}=solverGraph(lockedCells);
+  const key=st=>String.fromCharCode(...st);
+  const start=key(state),goal=key(Array.from({length:N},(_,i)=>(i+1)%N));
+  if(start===goal)return {solution:[],reason:'found'};
+  if(lockedCells.includes(state.indexOf(0)))return {solution:null,reason:'locked_empty'};
+  const left=new Map([[start,null]]),right=new Map([[goal,null]]);
+  let lf=[start],rf=[goal],count=0,slice=performance.now();
+  function path(meet){
+    const a=[],b=[];let s=meet,p;
+    while((p=left.get(s))!==null){a.push(p.move);s=p.parent;}
+    a.reverse();s=meet;while((p=right.get(s))!==null){b.push(p.move);s=p.parent;}
+    return a.concat(b);
+  }
+  while(lf.length&&rf.length){
+    const forward=lf.length<=rf.length,front=forward?lf:rf,own=forward?left:right,other=forward?right:left,next=[];
+    for(const s of front){
+      if((count++&127)===0){
+        if(solverCancelled(context))return {solution:null,reason:'aborted'};
+        if(performance.now()-slice>12){await solverYield();slice=performance.now();}
+      }
+      const e=s.indexOf('\0');
+      for(const n of adj[e]){
+        const a=s.split('');a[e]=a[n];a[n]='\0';const child=a.join('');
+        if(own.has(child))continue;
+        own.set(child,{parent:s,move:forward?n:e});
+        if(other.has(child))return {solution:path(child),reason:'found'};
+        next.push(child);
+        if(left.size+right.size>=maxStates)return {solution:null,reason:'state_limit'};
+      }
+    }
+    if(forward)lf=next;else rf=next;
+  }
+  return {solution:null,reason:'exhausted'};
+}
+
+/* Disjoint additive pattern databases. Untracked moves have cost 0,
+   moving a tracked tile has cost 1 (0-1 BFS). Each actual move is charged
+   to exactly one group. Tables include the empty cell and actual walls. */
+async function buildWallPatterns(context,onProgress){
+  const cacheKey=Array.from(wallSet).sort().join('|');
+  if(patternCache.has(cacheKey))return patternCache.get(cacheKey);
+  const {adj,dist}=solverGraph([]),groups=[[1,2,3,4],[5,6,7,8],[9,10,11,12],[13,14,15],
+    [1,5,9,13],[2,6,10,14],[3,7,11,15],[4,8,12]],patterns=[];
+  for(let gi=0;gi<groups.length;gi++){
+    if(solverCancelled(context))return null;
+    const group=groups[gi],length=1<<((group.length+1)*4),d=new Uint16Array(length);d.fill(65535);
+    let goal=15;for(let k=0;k<group.length;k++)goal|=(group[k]-1)<<((k+1)*4);
+    d[goal]=0;
+    let queue=new Uint32Array(65536),head=0,tail=0,count=0,expanded=0,slice=performance.now(),lastReport=0;
+    function put(code,front){
+      if(count===queue.length){const q=new Uint32Array(queue.length*2);for(let i=0;i<count;i++)q[i]=queue[(head+i)%queue.length];queue=q;head=0;tail=count;}
+      if(front){head=(head-1+queue.length)%queue.length;queue[head]=code;}else{queue[tail]=code;tail=(tail+1)%queue.length;}count++;
+    }
+    put(goal,false);
+    while(count){
+      if((expanded++&1023)===0){
+        if(solverCancelled(context))return null;
+        const now=performance.now();
+        if(now-slice>12){
+          if(onProgress&&now-lastReport>120){onProgress({phase:'patterns',group:gi+1,total:groups.length,iter:expanded});lastReport=now;}
+          await solverYield();slice=performance.now();
+        }
+      }
+      const code=queue[head];head=(head+1)%queue.length;count--;const e=code&15,old=d[code];
+      for(const n of adj[e]){
+        let shift=0;for(let k=1;k<=group.length;k++)if(((code>>>(k*4))&15)===n){shift=k*4;break;}
+        let child=(code&~15)|n;
+        if(shift)child=(child&~(15<<shift))|(e<<shift);
+        const nd=old+(shift?1:0);
+        if(nd<d[child]){d[child]=nd;put(child,!shift);}
+      }
+    }
+    patterns.push({group,d});
+  }
+  const positions=new Uint8Array(N);
+  const h=st=>{
+    let distance=0;for(let i=0;i<N;i++){positions[st[i]]=i;if(st[i])distance+=dist[i][st[i]-1];}
+    let sum=0,best=distance;
+    for(let pi=0;pi<patterns.length;pi++){
+      const {group,d}=patterns[pi];let code=positions[0];
+      for(let k=0;k<group.length;k++)code|=positions[group[k]]<<((k+1)*4);
+      const value=d[code];if(value===65535)return Infinity;sum+=value;
+      if((pi&3)===3){best=Math.max(best,sum);sum=0;}
+    }
+    return best;
+  };
+  // Keep only the most recently used board's tables.
+  patternCache.clear();patternCache.set(cacheKey,h);return h;
+}
+
+function verifyWallSolution(start,solution){
+  const st=start.slice();let e=st.indexOf(0);
+  for(const n of solution){if(!Number.isInteger(n)||n<0||n>=N||!canMoveTo(n,e))return false;st[e]=st[n];st[n]=0;e=n;}
+  return st.every((v,i)=>v===(i+1)%N);
+}
+
+async function solveWalledPhased(onProgress,context){
+  context=context||{id:solverGeneration};
+  const start=cells.slice(),startEmpty=empty,p1=PHASE1[mode]||PHASE1.classic;
+  const traps=computeTraps(p1.cells),targets=p1.cells.concat(traps),values=targets.map(i=>(i+1)%N);
+  const success=(solution,method,p1Length=0)=>verifyWallSolution(start,solution)
+    ?{solution,reason:'found',method,phase1Len:p1Length,phase2Len:solution.length-p1Length,macros:0}
+    :{solution:null,reason:'verification_failed'};
+  if(onProgress)onProgress({phase:0,p1Cells:p1.cells.slice(),traps});
+  const length=targets.length,normal=Array.from({length},(_,i)=>i);
+  const orders=[normal,normal.slice().reverse()];
+  if(length>=5)orders.push(normal.slice(p1.cells.length).concat(normal.slice(0,p1.cells.length)));
+  if(length===6)orders.push([2,1,0,5,4,3],[0,2,1,3,4,5]);
+  const tried=new Set();
   for(let oi=0;oi<orders.length;oi++){
-    if(searchAborted)return {solution:null,reason:'aborted'};
+    if(solverCancelled(context))return {solution:null,reason:'aborted'};
     if(onProgress)onProgress({phase:'bead1',attempt:oi+1,total:orders.length});
-    restore(origCells,origEmpty);
-    const r=solvePhase1Beads(cells.slice(),empty,p1AllCells,p1AllTiles,orders[oi]);
-    if(r){sol1=r.moves;method='beads';break;}
+    const first=solvePhase1Beads(start,startEmpty,targets,values,orders[oi]);
+    if(!first)continue;
+    const key=first.state.join(',');if(tried.has(key))continue;tried.add(key);
+    const remainder=await solveRemainder(first.state,targets,context);
+    if(remainder.solution)return success(first.moves.concat(remainder.solution),'beads + exact',first.moves.length);
+    if(remainder.reason==='aborted')return remainder;
   }
-
-  if(!sol1){
-    method='astar';
-    const goalFn=st=>{
-      for(let k=0;k<p1AllCells.length;k++){
-        if(st[p1AllCells[k]]!==p1AllTiles[k])return false;
-      }
-      return true;
-    };
-    const hFn=(st,dist)=>{
-      let h=0;
-      for(let k=0;k<p1AllCells.length;k++){
-        const cell=p1AllCells[k],target=p1AllTiles[k],cur=st[cell];
-        if(cur===target)continue;
-        let pos=-1;
-        for(let j=0;j<N;j++)if(st[j]===target){pos=j;break;}
-        if(pos>=0)h+=dist[pos][cell];
-        if(cur)h+=2;
-      }
-      for(const t of traps){
-        const target=trapGoal[t];
-        if(st[t]===target)continue;
-        let pos=-1;
-        for(let j=0;j<N;j++)if(st[j]===target){pos=j;break;}
-        if(pos>=0)h+=dist[pos][t];
-        h+=4;
-      }
-      return h;
-    };
-    for(const W of cfg.p1W){
-      if(searchAborted)return {solution:null,reason:'aborted'};
-      if(onProgress)onProgress({phase:1,W});
-      restore(origCells,origEmpty);
-      const r=await astarWalled(
-        cells.slice(),empty,goalFn,hFn,[],
-        cfg.p1T,cfg.p1S,W,null,
-        (it,sec,w,stored,mem)=>{if(onProgress)onProgress({phase:1,iter:it,sec,W:w,stored,mem});}
-      );
-      if(searchAborted)return {solution:null,reason:'aborted'};
-      if(r.solution){sol1=r.solution;break;}
-    }
+  if(solverCancelled(context))return {solution:null,reason:'aborted'};
+  if(onProgress)onProgress({phase:'patterns',group:0,total:8,iter:0});
+  const h=await buildWallPatterns(context,onProgress);
+  if(!h||solverCancelled(context))return {solution:null,reason:'aborted'};
+  const goal=st=>{for(let i=0;i<N;i++)if(st[i]!==((i+1)%N))return false;return true;};
+  const began=performance.now();let last=null;
+  for(const W of [2.5,5]){
+    if(solverCancelled(context))return {solution:null,reason:'aborted'};
+    const remaining=120000-(performance.now()-began);if(remaining<=0)break;
+    if(onProgress)onProgress({phase:'global',W,iter:0,sec:0});
+    last=await astarWalled(start,startEmpty,goal,h,[],remaining,1200000,W,null,
+      (iter,sec,w,stored,mem)=>{if(onProgress)onProgress({phase:'global',iter,sec,W:w,stored,mem});},context);
+    if(last.solution)return success(last.solution,'PDB A*');
+    if(last.reason!=='state_limit')break;
+    await solverYield();
   }
-
-  if(!sol1){restore(origCells,origEmpty);return {solution:null,reason:'phase1_failed'};}
-
-  restore(origCells,origEmpty);
-  for(const mv of sol1){
-    if(!canMoveTo(mv,empty)){restore(origCells,origEmpty);return {solution:null,reason:'phase1_apply_failed'};}
-    applyMove(mv,empty);
-  }
-  for(let k=0;k<p1AllCells.length;k++){
-    if(cells[p1AllCells[k]]!==p1AllTiles[k]){restore(origCells,origEmpty);return {solution:null,reason:'phase1_verify_failed'};}
-  }
-
-  const phase2Locked=p1AllCells.slice();
-  const phase2LockedSet=new Set(phase2Locked);
-  const p2Goal=st=>{
-    for(let c=0;c<N;c++){
-      if(phase2LockedSet.has(c))continue;
-      if(c===N-1){if(st[c]!==0)return false;}
-      else if(st[c]!==c+1)return false;
-    }
-    return true;
-  };
-  const p2H=(st,dist)=>{
-    let h=0;
-    for(let c=0;c<N;c++){
-      if(phase2LockedSet.has(c))continue;
-      const v=st[c];if(!v)continue;
-      h+=dist[c][v-1];
-    }
-    return h;
-  };
-
-  const maxCycleLen=N-phase2Locked.length;
-  const cycles=findShortCycles(maxCycleLen,phase2LockedSet);
-  const macros=[];
-  for(const cyc of cycles){
-    const Lc=cyc.length;
-    for(let ap=0;ap<Lc;ap++){
-      const mvs=[];
-      for(let k=1;k<=Lc;k++)mvs.push(cyc[(ap+k)%Lc]);
-      macros.push({anchor:cyc[ap],moves:mvs});
-    }
-  }
-  console.log('[Solver] mode='+mode+' phase1='+method+' free='+(N-phase2Locked.length)+' cycles='+cycles.length+' macros='+macros.length);
-  if(onProgress)onProgress({phase:'macros',count:macros.length,cycles:cycles.length});
-
-  let lastPhase2Reason=null;
-  for(const W of cfg.p2W){
-    if(searchAborted)return {solution:null,reason:'aborted'};
-    if(onProgress)onProgress({phase:2,W,macroCount:macros.length});
-    const r=await astarWalled(
-      cells.slice(),empty,p2Goal,p2H,phase2Locked,
-      cfg.p2T,cfg.p2S,W,macros,
-      (it,sec,w,stored,mem)=>{if(onProgress)onProgress({phase:2,iter:it,sec,W:w,stored,mem,macroCount:macros.length});}
-    );
-    if(searchAborted)return {solution:null,reason:'aborted'};
-    if(r.solution){
-      restore(origCells,origEmpty);
-      return {
-        solution:sol1.concat(r.solution),
-        reason:'found',
-        phase1Len:sol1.length,
-        phase2Len:r.solution.length,
-        method:method,
-        cycles:cycles.length,
-        macros:macros.length
-      };
-    }
-    lastPhase2Reason='phase2_'+r.reason;
-    if(r.reason==='exhausted')break;
-    if(r.reason!=='timeout'&&r.reason!=='state_limit')break;
-  }
-  restore(origCells,origEmpty);
-  return {solution:null,reason:lastPhase2Reason||'all_failed'};
+  return last||{solution:null,reason:'timeout'};
 }
 
 function restore(c,e){for(let i=0;i<N;i++)cells[i]=c[i];empty=e;}
@@ -1381,15 +1248,16 @@ function startSolving(){
   if(solved||animating||busy)return;
   if(isSolvedLayout()){showToast(t('alertScrambled'));return;}
   busy=true;searchAborted=false;
+  const context={id:++solverGeneration};
   setSolveButtonStop();updateButtons();
 
   if(mode==='classic'){
     setHint(t('hClassicSearch'),'search');
     solveClassicIDA(300000,(nodes,sec)=>{
-      if(searchAborted)return;
+      if(solverCancelled(context))return;
       setHint(t('hClassicProg',{n:nodes.toLocaleString(),t:sec.toFixed(1)}),'search');
     }).then(res=>{
-      if(searchAborted){busy=false;setSolveButtonIdle();updateButtons();resetHint();return;}
+      if(solverCancelled(context))return;
       busy=false;
       const dt=res.elapsedSec.toFixed(1),expanded=res.expanded.toLocaleString();
       if(!res.solution){
@@ -1407,11 +1275,15 @@ function startSolving(){
 
   setHint(t('hAnalyze'),'search');
   setTimeout(()=>{
-    if(searchAborted){busy=false;setSolveButtonIdle();updateButtons();resetHint();return;}
+    if(solverCancelled(context))return;
     solveWalledPhased(info=>{
-      if(searchAborted)return;
+      if(solverCancelled(context))return;
       const memTxt=(info.mem!==null&&info.mem!==undefined)?t('hMemSuffix',{n:info.mem}):'';
-      if(info.phase===0){
+      if(info.phase==='patterns'){
+        setHint(t('hPatterns',{a:info.group,b:info.total,n:info.iter.toLocaleString()}),'search');
+      }else if(info.phase==='global'){
+        setHint(t('hGlobal',{w:info.W,n:(info.stored||0).toLocaleString(),t:info.sec.toFixed(1)}),'search');
+      }else if(info.phase===0){
         const p1Txt=info.p1Cells.map(c=>c+1).join(', ');
         const trapsTxt=info.traps.length?t('hTraps',{n:info.traps.length}):'';
         setHint(t('hAnalyzeCells',{cells:p1Txt,traps:trapsTxt}),'search');
@@ -1429,8 +1301,8 @@ function startSolving(){
           setHint(t('hPhase2Prog',{w:info.W||'',mac:macTxt,s:info.iter.toLocaleString(),t:info.sec.toFixed(1),mem:memTxt}),'search');
         }else setHint(t('hPhase2',{w:info.W||'',mac:macTxt}),'search');
       }
-    }).then(res=>{
-      if(searchAborted){busy=false;setSolveButtonIdle();updateButtons();resetHint();return;}
+    },context).then(res=>{
+      if(solverCancelled(context))return;
       busy=false;
       if(!res.solution){
         setSolveButtonIdle();updateButtons();
@@ -1440,6 +1312,8 @@ function startSolving(){
         else if(res.reason==='exhausted')why=t('whyExhausted');
         else if(res.reason==='all_failed')why=t('whyAllFailed');
         else if(res.reason==='alloc_failed')why=t('whyAllocFailed');
+        else if(res.reason==='state_limit')why=t('whyStateLimit');
+        else if(res.reason==='verification_failed')why=t('whyVerification');
         else if(res.reason==='phase1_failed')why=t('whyP1Failed');
         else if(res.reason==='phase1_apply_failed')why=t('whyP1Apply');
         else if(res.reason==='phase1_verify_failed')why=t('whyP1Verify');
@@ -1451,10 +1325,11 @@ function startSolving(){
         return;
       }
       if(!res.solution.length){setSolveButtonIdle();updateButtons();resetHint();return;}
-      const phaseInfo=t('hPhaseInfo',{p1:res.phase1Len,method:res.method,p2:res.phase2Len,macros:res.macros});
+      const phaseInfo=res.method==='PDB A*'?t('hWholeInfo'):t('hPhaseInfo',{p1:res.phase1Len,method:res.method,p2:res.phase2Len,macros:res.macros});
       setHint(t('hFound',{n:res.solution.length,info:phaseInfo}),'success');
       animateSolution(res.solution);
     }).catch(err=>{
+      if(solverCancelled(context))return;
       console.error(err);
       busy=false;setSolveButtonIdle();updateButtons();
       setHint('Solver error: '+err,'error');
@@ -1463,6 +1338,7 @@ function startSolving(){
 }
 
 function stopSolving(){
+  solverGeneration++;
   searchAborted=true;
   if(animationTimer!==null){clearTimeout(animationTimer);animationTimer=null;}
   animating=false;busy=false;
@@ -1545,7 +1421,6 @@ function init(){
 
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);
 else init();
-})();
 </script>
 </body>
 </html>
