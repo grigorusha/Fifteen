@@ -21,6 +21,7 @@
   .tile{position:absolute;left:0;top:0;display:flex;align-items:center;justify-content:center;border-radius:16px;font-weight:800;font-variant-numeric:tabular-nums;color:#1b2230;background:linear-gradient(165deg,var(--tile-1) 0%,var(--tile-2) 52%,var(--tile-3) 100%);box-shadow:0 5px 0 -1px rgba(80,95,120,.55),0 12px 22px -10px rgba(20,30,50,.7),inset 0 1px 0 rgba(255,255,255,.98),inset 0 -3px 0 rgba(120,142,182,.30);transition:transform .18s cubic-bezier(.22,.9,.3,1.15),box-shadow .2s,filter .2s;will-change:transform;cursor:grab;z-index:2;overflow:hidden}
   .tile::after{content:"";position:absolute;inset:11px;border-radius:inherit;border:1.5px solid var(--tile-inner);box-shadow:inset 0 1px 0 rgba(255,255,255,.6);pointer-events:none}
   .tile.is-dragging{filter:brightness(1.04);box-shadow:0 9px 0 -2px rgba(80,95,120,.5),0 22px 34px -12px rgba(20,30,50,.85),0 0 24px -4px rgba(92,200,255,.7),inset 0 1px 0 rgba(255,255,255,.98);cursor:grabbing;z-index:5}
+  .board.previewing .tile{transition-duration:.09s,.2s,.2s}
   .board.no-anim .tile{transition:none!important}
   .panel{display:flex;flex-direction:column;gap:14px;padding:16px;border-radius:20px;border:1px solid var(--stroke);background:var(--panel-bg);box-shadow:0 20px 44px -26px rgba(0,0,0,.55),inset 0 1px 0 rgba(255,255,255,.15);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);align-self:stretch;min-height:0;transition:background .25s,border-color .25s}
   .panel-spacer{flex:1 1 auto;min-height:0}
@@ -61,7 +62,7 @@
   .btn.solve:hover:not(:disabled){background:linear-gradient(180deg,#c8f7d6,#5add99)}
   .btn.stop{color:#fff;font-weight:800;background:linear-gradient(180deg,#ff7b7b,#e03b3b);border-color:rgba(200,50,50,.7);box-shadow:0 10px 22px -12px rgba(224,59,59,1),inset 0 1px 0 rgba(255,255,255,.5)}
   .btn.stop:hover:not(:disabled){background:linear-gradient(180deg,#ff9090,#ec4b4b)}
-  .hint{margin:0;padding:0 3px;font-size:12px;line-height:1.55;color:var(--muted);font-variant-numeric:tabular-nums;min-height:2.8em;white-space:pre-line}
+  .hint{margin:0;padding:0 3px;font-size:12px;line-height:1.55;color:var(--muted);font-variant-numeric:tabular-nums;height:6.2em;flex:0 0 6.2em;overflow:auto;overflow-wrap:anywhere;white-space:pre-line}
   .hint.is-error{color:#c23232;font-weight:600}html[data-theme="dark"] .hint.is-error{color:#ffb0b0}
   .hint.is-success{color:#116b3e;font-weight:600}html[data-theme="dark"] .hint.is-success{color:#b6f0c8}
   .hint.is-search{text-align:center;color:#184a78;font-weight:600}html[data-theme="dark"] .hint.is-search{color:#b9e6ff}
@@ -137,6 +138,17 @@
     z-index:5;
   }
   @keyframes pop{from{transform:scale(.9);opacity:0}to{transform:scale(1);opacity:1}}@keyframes fade{from{opacity:0}to{opacity:1}}
+  .actions [hidden]{display:none!important}
+  .actions{grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:42px}
+  .actions>.btn{padding-block:2px}
+  .controls-heading{display:flex;align-items:center;justify-content:space-between;height:18px}
+  #pasteSol,#solveBtn,#scrambleBtn{white-space:normal;padding-inline:5px}
+  #viewer{grid-column:1/-1;min-width:0;height:100%}
+  .pvBar{height:100%;display:grid;grid-template-columns:clamp(32px,12%,44px) minmax(0,1fr) clamp(32px,12%,44px);gap:clamp(7px,3%,12px);align-items:center}
+  .pvBar .btn{padding:5px 2px;min-width:23px;height:100%}
+  .pvNav{height:100%;display:grid;grid-template-columns:auto auto minmax(20px,1fr) auto auto;align-items:center;gap:3px}
+  #pvRange{width:100%;min-width:0;margin:0}
+  #pvCount{font-size:11px;font-variant-numeric:tabular-nums}
 </style>
 </head>
 <body>
@@ -185,13 +197,17 @@
       </div>
       <div class="panel-spacer"></div>
       <div class="group">
-        <div class="group-title" id="lblControls">Управление</div>
+        <div class="group-title controls-heading"><span id="lblControls">Управление</span><output id="pvCount" hidden></output></div>
         <div class="actions">
+          <div id="viewer" hidden>
+            <div class="pvBar"><button class="btn" id="pvPlay">▶</button><div class="pvNav"><button class="btn" id="pvFirst">«</button><button class="btn" id="pvPrev">‹</button><input type="range" id="pvRange" min="0" step="1" value="0"><button class="btn" id="pvNext">›</button><button class="btn" id="pvLast">»</button></div><button class="btn" id="pvCopy">⧉</button></div>
+          </div>
           <button class="btn" id="undoBtn"><span class="ico">↶</span><span data-i18n="undo">Назад</span></button>
           <button class="btn" id="redoBtn"><span class="ico">↷</span><span data-i18n="redo">Вперёд</span></button>
-          <button class="btn primary wide" id="scrambleBtn"><span class="ico">🎲</span><span data-i18n="scramble">Перемешать</span></button>
+          <button class="btn primary" id="scrambleBtn"><span class="ico">🎲</span><span data-i18n="scramble">Перемешать</span></button>
           <button class="btn" id="resetBtn"><span class="ico">↺</span><span data-i18n="reset">Сброс</span></button>
           <button class="btn solve" id="solveBtn"><span class="ico"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M4 2.5 L13.5 8 L4 13.5 Z"/></svg></span><span data-i18n="solve">Решить</span></button>
+          <button class="btn" id="pasteSol"><span aria-hidden="true">📋</span><span data-i18n="pasteSol">Вставить решение</span></button>
         </div>
       </div>
       <p class="hint" id="hintText"></p>
@@ -219,7 +235,7 @@
 
 <script>
 'use strict';
-const APP_VERSION='2.02';
+const APP_VERSION='2.06';
 
 /* ============================================================
    ЯЗЫК
@@ -232,6 +248,7 @@ const I18N = {
     mode_classic: 'Классика',
     mode_wallsA: 'Перегородки A', mode_wallsB: 'Перегородки B', mode_wallsC: 'Перегородки C',
     mode_wallsD: 'Перегородки D', mode_wallsE: 'Перегородки E', mode_wallsF: 'Перегородки F', mode_wallsG: 'Перегородки G',
+    "pasteSol": "Вставить решение", "pvStart": "Плей", "pvPause": "Пауза", "pvHome": "В начало", "pvBack": "На ход назад", "pvStep": "Ход решения", "pvForward": "На ход вперёд", "pvEnd": "В конец", "pvCopy": "Копировать решение", "pvClose": "Закрыть просмотр", "pvCopied": "Решение скопировано", "manualCopy": "Скопируйте решение (Ctrl+C)", "manualPaste": "Вставьте текст решения (Ctrl+V)", "badPath": "Некорректное решение: проверьте текст, ходы и конечную позицию.", "wrongBoard": "Выберите доску:", "pvLoaded": "Решение проверено. Нажмите ▶ для просмотра.",
     controlsTitle: 'Управление',
     undo: 'Назад', redo: 'Вперёд', scramble: 'Перемешать', reset: 'Сброс', solve: 'Решить', stop: 'Стоп',
     defaultHint: 'Тяните плитку на пустую клетку — или кликните по ней.\nЕсли пустая на одной линии — потяните в её сторону: сдвинется вся группа.',
@@ -257,7 +274,7 @@ const I18N = {
     hPhase2Prog: 'Фаза 2, W={w}{mac}:\n{s} состояний · {t} с{mem}',
     hMacSuffix: ' · макро: {n}',
     hMemSuffix: ' · {n} МБ',
-    hFound: 'Решение найдено ({n} ходов{info}). Показ…',
+    hFound: 'Решение найдено ({n} ходов{info}).',
     hNotFound: 'Решение не найдено — {why}.',
     hPhaseInfo: ' (фаза 1: {p1}, {method}, фаза 2: {p2}, макро: {macros})',
     whyTimeout: 'истекло время', whyAborted: 'остановлено', whyExhausted: 'пространство исчерпано',
@@ -280,6 +297,7 @@ const I18N = {
     mode_classic: 'Classic',
     mode_wallsA: 'Walls A', mode_wallsB: 'Walls B', mode_wallsC: 'Walls C',
     mode_wallsD: 'Walls D', mode_wallsE: 'Walls E', mode_wallsF: 'Walls F', mode_wallsG: 'Walls G',
+    "pasteSol": "Paste solution", "pvStart": "Play", "pvPause": "Pause", "pvHome": "First step", "pvBack": "Previous step", "pvStep": "Solution step", "pvForward": "Next step", "pvEnd": "Last step", "pvCopy": "Copy solution", "pvClose": "Close viewer", "pvCopied": "Solution copied", "manualCopy": "Copy the solution (Ctrl+C)", "manualPaste": "Paste the solution (Ctrl+V)", "badPath": "Invalid solution: check the text, moves and final position.", "wrongBoard": "Select board:", "pvLoaded": "Solution verified. Press ▶ to play.",
     controlsTitle: 'Controls',
     undo: 'Undo', redo: 'Redo', scramble: 'Scramble', reset: 'Reset', solve: 'Solve', stop: 'Stop',
     defaultHint: 'Drag a tile into the empty cell — or just click on it.\nIf the empty cell is in the same row/column — drag toward it to shift the whole group.',
@@ -305,7 +323,7 @@ const I18N = {
     hPhase2Prog: 'Phase 2, W={w}{mac}:\n{s} states · {t} s{mem}',
     hMacSuffix: ' · macros: {n}',
     hMemSuffix: ' · {n} MB',
-    hFound: 'Solution found ({n} moves{info}). Playing…',
+    hFound: 'Solution found ({n} moves{info}).',
     hNotFound: 'No solution — {why}.',
     hPhaseInfo: ' (phase 1: {p1}, {method}, phase 2: {p2}, macros: {macros})',
     whyTimeout: 'timeout', whyAborted: 'aborted', whyExhausted: 'space exhausted',
@@ -366,6 +384,7 @@ function applyLang(newLang){
   } else {
     setSolveButtonIdle();
   }
+  syncViewer();
   const langIco = document.getElementById('langIco');
   const langLabel = document.getElementById('langLabel');
   if (lang === 'ru'){
@@ -515,18 +534,20 @@ function renderWalls(){
 function positionOf(i){const step=metrics.cell+metrics.gap;return{x:metrics.pad+colOf(i)*step,y:metrics.pad+rowOf(i)*step};}
 function updatePositions(instant){
   if(instant)boardEl.classList.add('no-anim');
-  for(let i=0;i<N;i++){const v=cells[i];if(!v)continue;const p=positionOf(i);tiles[v].style.transform=`translate3d(${p.x}px,${p.y}px,0)`;}
+  const frame=preview?preview.frames.subarray(preview.at*16,preview.at*16+16):cells;
+  for(let i=0;i<N;i++){const v=frame[i];if(!v)continue;const p=positionOf(i);tiles[v].style.transform=`translate3d(${p.x}px,${p.y}px,0)`;}
   if(instant){void boardEl.offsetWidth;boardEl.classList.remove('no-anim');}
 }
-function render(instant){updatePositions(!!instant);movesEl.textContent=String(history.length);updateButtons();}
+function render(instant){updatePositions(!!instant);movesEl.textContent=String(preview?preview.at:history.length);updateButtons();}
 function updateButtons(){
   undoBtn.disabled=busy||animating||solved||history.length===0;
   redoBtn.disabled=busy||animating||solved||redoStack.length===0;
-  scrambleBtn.disabled=busy||animating;
-  resetBtn.disabled=busy||animating;
+  scrambleBtn.disabled=busy;
+  resetBtn.disabled=busy;
   solveBtn.disabled=solved&&solveBtn.dataset.state!=='stop';
   const mb=modesEl.querySelectorAll('.mode-btn');
-  for(let i=0;i<mb.length;i++)mb[i].disabled=busy||animating;
+  for(let i=0;i<mb.length;i++)mb[i].disabled=busy;
+  syncViewer();
 }
 function applyMove(from,to){cells[to]=cells[from];cells[from]=0;empty=from;}
 function userMove(from){
@@ -577,11 +598,13 @@ function shuffleBoard(){
 function isSolvedLayout(){for(let i=0;i<N-1;i++)if(cells[i]!==i+1)return false;return cells[N-1]===0;}
 function stopEverything(){solverGeneration++;searchAborted=true;if(animationTimer!==null){clearTimeout(animationTimer);animationTimer=null;}animating=false;busy=false;}
 function newGame(doShuffle){
+  closeViewer();
   stopEverything();hideWin();solved=false;resetSolvedBoard();
   if(doShuffle){let g=0;do{shuffleBoard();g++;}while(isSolvedLayout()&&g<20);}
   history=[];redoStack=[];resetTimer();render(true);setSolveButtonIdle();resetHint();
 }
 function resetToSolved(){
+  closeViewer();solverGeneration++;
   if(busy||animating)return;
   hideWin();solved=false;resetSolvedBoard();
   history=[];redoStack=[];resetTimer();render(true);setSolveButtonIdle();resetHint();
@@ -1216,32 +1239,119 @@ function restore(c,e){for(let i=0;i<N;i++)cells[i]=c[i];empty=e;}
 function setSolveButtonIdle(){solveBtn.innerHTML='<span class="ico">'+SVG_PLAY+'</span><span data-i18n="solve">'+t('solve')+'</span>';solveBtn.classList.add('solve');solveBtn.classList.remove('stop');solveBtn.dataset.state='idle';}
 function setSolveButtonStop(){solveBtn.innerHTML='<span class="ico">'+SVG_STOP+'</span><span data-i18n="stop">'+t('stop')+'</span>';solveBtn.classList.add('stop');solveBtn.classList.remove('solve');solveBtn.dataset.state='stop';}
 
-function animateSolution(solution){
-  const clean=[];
-  for(const m of solution)if(typeof m==='number'&&m>=0&&m<N)clean.push(m);
-  solution=clean;
-  if(!solution.length){setSolveButtonIdle();updateButtons();resetHint();return;}
-  animating=true;setSolveButtonStop();updateButtons();
-  let i=0;
-  const delay=Math.max(15,Math.min(110,Math.floor(7000/Math.max(1,solution.length))));
-  function step(){
-    if(!animating){animationTimer=null;setSolveButtonIdle();updateButtons();resetHint();return;}
-    if(i>=solution.length){animating=false;animationTimer=null;setSolveButtonIdle();updateButtons();resetHint();return;}
-    const from=solution[i++];
-    if(!canMoveTo(from,empty)){
-      animating=false;animationTimer=null;setSolveButtonIdle();updateButtons();
-      setHint(t('hNotFound',{why:t('whyUnknown')}),'error');
-      return;
-    }
-    const to=empty;
-    applyMove(from,to);
-    history.push({from,to});redoStack.length=0;
-    if(!timerOn)startTimer();
-    render();checkWin();
-    if(solved){animating=false;animationTimer=null;setSolveButtonIdle();updateButtons();resetHint();return;}
-    animationTimer=setTimeout(step,delay);
+const pvEl=id=>document.getElementById(id);
+let preview=null;
+function playbackFrames(start,moves){
+  if(!Array.isArray(start)||start.length!==16||new Set(start).size!==16||
+     !start.every(v=>Number.isInteger(v)&&v>=0&&v<16)||!Array.isArray(moves)||
+     !moves.length||moves.length>100000)throw Error(t('badPath'));
+  const data=new Uint8Array(16*(moves.length+1)),state=start.slice();
+  let hole=state.indexOf(0);data.set(state);
+  for(let i=0;i<moves.length;i++){
+    const from=moves[i];
+    if(!Number.isInteger(from)||from<0||from>=16||!canMoveTo(from,hole))throw Error(t('badPath'));
+    state[hole]=state[from];state[from]=0;hole=from;data.set(state,(i+1)*16);
   }
-  animationTimer=setTimeout(step,60);
+  if(!state.every((v,i)=>v===(i+1)%16))throw Error(t('badPath'));
+  return data;
+}
+function syncViewer(){
+  const p=preview;
+  boardEl.classList.toggle('previewing',!!p);pvEl('pvCount').hidden=!p;pvEl('viewer').hidden=!p;undoBtn.hidden=redoBtn.hidden=!!p;
+  pvEl('pasteSol').disabled=busy||!!p;
+  if(!p)return;
+  const range=pvEl('pvRange'),last=p.moves.length;
+  range.max=last;range.value=p.at;
+  for(const [id,key] of Object.entries({pvPlay:p.timer!==null?'pvPause':'pvStart',pvFirst:'pvHome',pvPrev:'pvBack',pvRange:'pvStep',pvNext:'pvForward',pvLast:'pvEnd',pvCopy:'pvCopy'})){
+    const el=pvEl(id);el.title=t(key);el.setAttribute('aria-label',t(key));
+  }
+  pvEl('pvPlay').textContent=p.timer===null?'▶':'Ⅱ';
+  pvEl('pvFirst').disabled=pvEl('pvPrev').disabled=p.at===0;
+  pvEl('pvLast').disabled=pvEl('pvNext').disabled=p.at===last;
+  pvEl('pvCount').textContent=p.at+' / '+last;
+  range.setAttribute('aria-valuetext',p.at+' / '+last);
+  solveBtn.textContent=t('pvClose');solveBtn.disabled=false;
+}
+function openViewer(start,moves){
+  const frames=playbackFrames(start,moves);
+  preview={frames,start:start.slice(),moves:moves.slice(),at:0,timer:null,resume:timerOn,win:winEl.classList.contains("show")};
+  if(preview.win)hideWin();
+  stopTimer();animating=true;setSolveButtonIdle();render(true);
+}
+function pauseViewer(){if(preview){clearInterval(preview.timer);preview.timer=null;syncViewer();}}
+function closeViewer(){
+  if(!preview)return;
+  const resume=preview.resume,win=preview.win;clearInterval(preview.timer);preview=null;animating=false;
+  if(win){winEl.classList.add("show");boardEl.classList.add("is-solved");}
+  setSolveButtonIdle();render(true);resetHint();if(resume)startTimer();
+}
+function seekViewer(i,manual=true){
+  if(!preview)return;
+  if(manual)pauseViewer();
+  preview.at=Math.min(preview.moves.length,Math.max(0,i));
+  if(preview.at===preview.moves.length)pauseViewer();
+  render(manual);
+}
+function playViewer(){
+  const p=preview;if(!p)return;
+  if(p.timer!==null){pauseViewer();return;}
+  if(p.at===p.moves.length)seekViewer(0);
+  p.timer=setInterval(()=>{if(preview===p)seekViewer(p.at+1,false);},160);
+  syncViewer();
+}
+function readClipboardSolution(text){
+  text=text.trim();
+  if(text.startsWith('{'))return JSON.parse(text);
+  const lines=text.split(/\r\n?|\n/).map(s=>s.trim());
+  if(lines.length!==4||lines[0]!=='Fifteen solution')throw Error();
+  const board=/^board:\s*(\w+)$/.exec(lines[1]);
+  function numbers(line,key){
+    if(!line.startsWith(key+':'))throw Error();
+    return line.slice(key.length+1).split(',').map(token=>{
+      token=token.trim();if(!/^\d+$/.test(token))throw Error();return Number(token);
+    });
+  }
+  if(!board)throw Error();
+  return {format:'Fifteen solution 1',board:board[1],start:numbers(lines[2],'start'),moves:numbers(lines[3],'moves')};
+}
+function solutionTextDialog(value){
+  return new Promise(resolve=>{
+    const dlg=document.createElement('dialog'),form=document.createElement('form'),label=document.createElement('label'),area=document.createElement('textarea');
+    form.method='dialog';label.textContent=t(value==null?'manualPaste':'manualCopy');area.rows=7;area.wrap='off';area.style.cssText='display:block;width:min(64vw,530px);margin:8px 0';
+    area.value=value||'';area.readOnly=value!=null;label.appendChild(area);form.appendChild(label);
+    const ok=document.createElement('button');ok.className='btn';ok.value='ok';ok.textContent=value==null?t('pasteSol'):'OK';form.appendChild(ok);
+    if(value==null){const cancel=document.createElement('button');cancel.className='btn';cancel.value='cancel';cancel.textContent=lang==='ru'?'Отмена':'Cancel';form.appendChild(cancel);}
+    dlg.addEventListener('keydown',e=>e.stopPropagation());dlg.addEventListener('close',()=>{const result=dlg.returnValue==='ok'?area.value:null;dlg.remove();resolve(result);},{once:true});
+    dlg.appendChild(form);document.body.appendChild(dlg);dlg.showModal();area.focus();if(value!=null)area.select();
+  });
+}
+async function copyViewer(){
+  if(!preview)return;
+  const text=['Fifteen solution','board: '+mode,'start: '+preview.start.join(','),'moves: '+preview.moves.map(i=>i+1).join(',')].join('\n');
+  try{await navigator.clipboard.writeText(text);}
+  catch{
+    const area=document.createElement('textarea');area.value=text;area.style.cssText='position:fixed;left:-9999px';document.body.appendChild(area);area.select();
+    let ok=false;try{ok=document.execCommand('copy');}catch{}finally{area.remove();}
+    if(!ok){await solutionTextDialog(text);return;}
+  }
+  showToast(t('pvCopied'));
+}
+async function pasteViewer(){
+  if(busy||preview)return;
+  const ticket=++solverGeneration,board=mode;
+  let text;try{text=await navigator.clipboard.readText();}catch{text=await solutionTextDialog(null);}
+  if(text==null||ticket!==solverGeneration||busy||preview||board!==mode)return;
+  try{
+    if(text.length>1000000)throw Error(t('badPath'));
+    const d=readClipboardSolution(text);
+    if(!d||d.format!=='Fifteen solution 1'||!Array.isArray(d.moves)||!d.moves.every(Number.isInteger))throw Error();
+    if(d.board!==mode&&Object.prototype.hasOwnProperty.call(MODE_WALLS,d.board))throw Error(t('wrongBoard')+' '+t('mode_'+d.board));
+    if(d.board!==mode)throw Error();
+    openViewer(d.start,d.moves.map(n=>n-1));setHint(t('pvLoaded'),'success');
+  }catch(err){showToast(err.message&&err.message.startsWith(t('wrongBoard'))?err.message:t('badPath'));}
+}
+function animateSolution(moves){
+  try{openViewer(cells,moves);playViewer();}catch{setSolveButtonIdle();updateButtons();setHint(t('badPath'),'error');}
 }
 
 function startSolving(){
@@ -1346,6 +1456,7 @@ function stopSolving(){
   showToast(t('alertStopped'));
 }
 function onSolveButtonClick(){
+  if(preview){closeViewer();return;}
   if(solveBtn.dataset.state==='stop')stopSolving();
   else startSolving();
 }
@@ -1368,9 +1479,16 @@ function init(){
   boardEl.addEventListener('pointercancel',onPointerUp);
   boardEl.addEventListener('contextmenu',e=>e.preventDefault());
 
+  pvEl('pvPlay').onclick=playViewer;
+  pvEl('pvFirst').onclick=()=>seekViewer(0);
+  pvEl('pvPrev').onclick=()=>seekViewer(preview.at-1);
+  pvEl('pvNext').onclick=()=>seekViewer(preview.at+1);
+  pvEl('pvLast').onclick=()=>seekViewer(preview.moves.length);
+  pvEl('pvRange').oninput=e=>seekViewer(Number(e.target.value));
+  pvEl('pvCopy').onclick=copyViewer;pvEl('pasteSol').onclick=pasteViewer;
   undoBtn.addEventListener('click',undo);
   redoBtn.addEventListener('click',redo);
-  scrambleBtn.addEventListener('click',()=>{if(!busy&&!animating)newGame(true);});
+  scrambleBtn.addEventListener('click',()=>{if(!busy)newGame(true);});
   resetBtn.addEventListener('click',resetToSolved);
   solveBtn.addEventListener('click',onSolveButtonClick);
   winBtn.addEventListener('click',()=>newGame(true));
@@ -1405,6 +1523,7 @@ function init(){
 
   document.addEventListener('keydown',e=>{
     if(e.key==='Escape'){
+      if(preview){closeViewer();return;}
       if (isMiniboardShown()){ hideMiniboard(); return; }
       if (solveBtn.dataset.state==='stop'){ e.preventDefault(); stopSolving(); return; }
     }
